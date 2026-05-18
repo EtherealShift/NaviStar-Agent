@@ -22,8 +22,8 @@ class AgentModel:
     # 中间件
     middleware: list[Any]
 
-    # 是否思考
-    thinking: bool = False
+    # 思考模式, {"type": "enabled"} 或 {"type": "disabled"}
+    thinking: dict[str, str] | None = None
 
     # 温度
     temperature: float = 0.7

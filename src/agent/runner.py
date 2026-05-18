@@ -10,7 +10,7 @@ def create_agent_with(agent: AgentModel):
     # 选择服务商
 
     global _MODEL, _llm
-    for provider, model_name in MODEL_LIST:
+    for provider, model_name in MODEL_LIST.items():
         if agent.model_name in model_name:
             _MODEL = provider
 

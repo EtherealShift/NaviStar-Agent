@@ -7,9 +7,13 @@ from agent.middlewares.middleware import install_middlewares
 from agent.prompys.system_prompt import SYSTEM_PROMPT
 from agent.runner import create_agent_with
 from agent.tools.tools import install_tools, get_network_tools
+from app.database.conversatuon_db import del_message_content, query_conversation, get_query_content_list
+from app.middlewares.middleware import install_after_middlewares
+from app.models.enty.conversation_messages import Conversation
 from app.models.req.agent_req import AgentReq
 from loguru import logger
 
+from app.models.resp.query_resp import ConversationList
 from common.memory.memory import get_checkpoint
 from common.models.common_model import AgentModel
 from common.models.result import Result
@@ -26,29 +30,35 @@ async def chat_stream(req: AgentReq):
     """
     tools = await install_tools()
 
+    thinking: dict[str, str] = {"type": "disabled"}
+
     if req.thinking:
         logger.info("Thinking...")
+        thinking = {"type": "enabled"}
         get_network_tools(tools)
 
     logger.info(f"tools: {[t.name for t in tools]}")
 
     checkpointer = await get_checkpointer_dep()
     middlewares = install_middlewares()
-    # install_after_middlewares(middlewares)
+
+    install_after_middlewares(middlewares)
 
     system_prompt = req.system_prompt or SYSTEM_PROMPT.format(
         today=datetime.now().strftime("%Y年%m月%d日")
     )
 
+    model_name = req.model_name or "deepseek-v4-flash"
+
     agent = create_agent_with(
         AgentModel(
-            model_name=req.model_name,
+            model_name=model_name,
             system_prompt=system_prompt,
             tools=tools,
             checkpointer=checkpointer,
             middleware=middlewares,
             temperature=req.temperature,
-            thinking=req.thinking
+            thinking=thinking
         )
     )
 
@@ -93,6 +103,56 @@ async def chat_delete(thread_id: str):
 
     await checkpointer.adelete_thread(thread_id)
 
+    # 删除信息
+    result = await del_message_content(thread_id)
+
+    if result.code != 200:
+        return Result(msg=f"Thread {thread_id} delete failed.").failure()
+
     return Result(msg=f"Thread {thread_id} deleted.").success()
+
+
+
+async def chat_query(thread_id: str) -> Result:
+    """
+    根据线程ID查询对话
+    :param thread_id:
+    """
+    result = await query_conversation(thread_id)
+
+    if result.code != 200:
+        return Result(msg=f"Thread {thread_id} query failed.").failure()
+
+
+    return result
+
+
+
+
+async def chat_conversation_list() -> Result:
+    """
+    获取会话列表
+    """
+    result = await get_query_content_list()
+
+    if result.code != 200:
+        return Result(msg="Failed to get conversation list").failure()
+
+    conversation: list[Conversation] = result.data
+
+    conversation_list: list[ConversationList] = []
+
+    for item in conversation:
+        conversation_list.append(ConversationList(
+            thread_id=item.thread_id,
+            title=item.title,
+            created_at=item.created_at,
+        ))
+
+
+
+    return Result(data=conversation_list).success()
+
+
 
 

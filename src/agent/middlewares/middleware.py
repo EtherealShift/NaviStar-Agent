@@ -35,7 +35,6 @@ def install_middlewares() -> list:
     """安装所有中间件，返回列表供 Agent 使用。"""
     logger.info("[中间件] 开始安装默认中间件栈")
     middlewares = []
-
     middlewares.extend(install_builtin_middlewares())
     logger.info("[中间件] 官方内置中间件添加完成")
     return middlewares
