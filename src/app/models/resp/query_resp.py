@@ -20,3 +20,9 @@ class ConversationList(BaseModel):
     title: str
 
     created_at: datetime
+
+    updated_at: datetime
+
+    is_network: bool = False
+
+    is_thinking: bool = False

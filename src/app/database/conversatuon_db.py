@@ -59,11 +59,23 @@ async def query_conversation(thread_id: str) -> Result:
         )
         message_content: list[MessageContent] = result.scalars().all()
 
-
-
         logger.info(f"Message content: {len(message_content)}, thread_id: {thread_id}")
 
-    return Result(data=message_content).success()
+        data = [
+            {
+                "id": msg.id,
+                "thread_id": msg.thread_id,
+                "group_id": msg.group_id,
+                "content": msg.content,
+                "role": msg.role,
+                "created_at": msg.created_at.isoformat() if msg.created_at else None,
+                "msg_order": msg.msg_order,
+                "meta_data": msg.meta_data,
+            }
+            for msg in message_content
+        ]
+
+    return Result(data=data).success()
 
 
 async def del_message_content(thread_id: str) -> Result:

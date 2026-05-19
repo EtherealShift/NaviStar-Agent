@@ -39,7 +39,8 @@ async def install_tools() -> list[BaseTool]:
     ]
 
 
-def get_network_tools(tools: list[BaseTool]):
+def get_network_tools(tools: list[BaseTool]) -> list[BaseTool]:
     tools.append(
         TavilySearch(max_results=5, topic="general")
     )
+    return tools

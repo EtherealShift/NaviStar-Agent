@@ -55,7 +55,7 @@ async def _save_conversation(state: AgentState, runtime: Runtime):
             # 思考内容
             reasoning = msg.additional_kwargs.get("reasoning_content")
             if reasoning and isinstance(reasoning, str) and reasoning.strip():
-                thinking_model = MessagesModel()
+                thinking_model = MessagesModel(msg)
                 thinking_model.role = "AI_Thinking"
                 thinking_model.content = reasoning
                 records.append(thinking_model)
@@ -63,7 +63,7 @@ async def _save_conversation(state: AgentState, runtime: Runtime):
             # 输出内容
             output_content = msg.content if isinstance(msg.content, str) else str(msg.content)
             if output_content.strip():
-                output_model = MessagesModel()
+                output_model = MessagesModel(msg)
                 output_model.role = "AI"
                 output_model.content = output_content
                 records.append(output_model)

@@ -147,6 +147,9 @@ async def chat_conversation_list() -> Result:
             thread_id=item.thread_id,
             title=item.title,
             created_at=item.created_at,
+            updated_at=item.updated_at,
+            is_network=False,
+            is_thinking=False,
         ))
 
 

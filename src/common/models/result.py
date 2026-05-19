@@ -9,7 +9,7 @@ class Result(BaseModel):
     msg: str = "success"
 
     def success(self) -> "Result":
-        return Result(code=self.code, data=self.data, msg=self.msg if self.msg != "success" else "success")
+        return Result(code=200, data=self.data, msg=self.msg or "success")
 
     def failure(self) -> "Result":
         return Result(code=400, data=self.data, msg=self.msg or "failure")
