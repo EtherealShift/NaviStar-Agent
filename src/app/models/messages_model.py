@@ -58,13 +58,13 @@ class MessagesModel:
 
 
 class MessageContentModel(BaseModel):
-    thread_id: str
-    group_id: int
-    role: str
-    content: str
-    msg_order: int
-    created_at: str | None
-    meta_data: dict = Field(default_factory=dict)
+    thread_id: str # 线程id
+    group_id: int  # 分组id
+    role: str # 角色
+    content: str # 内容
+    msg_order: int # 消息顺序
+    created_at: str | None # 创建时间
+    meta_data: dict = Field(default_factory=dict) # 元数据，不展示
 
 
     def __str__(self):

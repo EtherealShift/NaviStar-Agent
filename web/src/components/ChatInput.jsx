@@ -10,6 +10,7 @@ export default function ChatInput({
   networkEnabled,
   temperature,
   modelName,
+  modelGroups,
   onChange,
   onClear,
   onSubmit,
@@ -59,7 +60,7 @@ export default function ChatInput({
             className="max-h-36 min-h-14 w-full resize-none overflow-y-auto bg-transparent px-2 py-2 text-sm leading-6 text-zinc-100 outline-none placeholder:text-zinc-600 disabled:cursor-not-allowed disabled:opacity-60"
           />
           <div className="flex items-center justify-between gap-3 pt-2">
-            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pr-2">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 pr-2">
               <div className="flex rounded-xl border border-white/10 bg-black/20 p-1">
                 <button
                   type="button"
@@ -108,7 +109,12 @@ export default function ChatInput({
                 />
               </label>
 
-              <ModelPicker value={modelName} disabled={sending} onChange={onModelChange} />
+              <ModelPicker
+                value={modelName}
+                groups={modelGroups}
+                disabled={sending}
+                onChange={onModelChange}
+              />
             </div>
 
             <div className="flex shrink-0 items-center gap-2">

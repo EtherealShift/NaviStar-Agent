@@ -2,15 +2,29 @@ import { Check, ChevronDown, Cpu } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 const MODEL_OPTIONS = [
-  'deepseek-v4',
   'deepseek-v4-flash',
-  'deepseek-chat',
-  'deepseek-reasoner',
+  'deepseek-v4-pro',
 ];
 
-export default function ModelPicker({ value, disabled, onChange }) {
+function normalizeGroups(groups) {
+  if (!groups || typeof groups !== 'object') {
+    return { DEFAULT: MODEL_OPTIONS };
+  }
+
+  const entries = Object.entries(groups)
+    .map(([provider, models]) => [
+      provider,
+      Array.isArray(models) ? models.filter(Boolean) : [],
+    ])
+    .filter(([, models]) => models.length > 0);
+
+  return entries.length ? Object.fromEntries(entries) : { DEFAULT: MODEL_OPTIONS };
+}
+
+export default function ModelPicker({ value, groups, disabled, onChange }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
+  const modelGroups = normalizeGroups(groups);
 
   useEffect(() => {
     const close = (event) => {
@@ -37,25 +51,30 @@ export default function ModelPicker({ value, disabled, onChange }) {
       </button>
       {open && (
         <div className="model-menu" role="listbox" aria-label="选择模型">
-          {MODEL_OPTIONS.map((model) => {
-            const selected = model === value;
-            return (
-              <button
-                key={model}
-                type="button"
-                role="option"
-                aria-selected={selected}
-                className={`model-menu__item ${selected ? 'model-menu__item--selected' : ''}`}
-                onClick={() => {
-                  onChange(model);
-                  setOpen(false);
-                }}
-              >
-                <span>{model}</span>
-                {selected && <Check className="h-4 w-4 text-teal-300" aria-hidden="true" />}
-              </button>
-            );
-          })}
+          {Object.entries(modelGroups).map(([provider, models]) => (
+            <div key={provider} className="model-menu__group">
+              <div className="model-menu__group-label">{provider}</div>
+              {models.map((model) => {
+                const selected = model === value;
+                return (
+                  <button
+                    key={`${provider}-${model}`}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    className={`model-menu__item ${selected ? 'model-menu__item--selected' : ''}`}
+                    onClick={() => {
+                      onChange(model);
+                      setOpen(false);
+                    }}
+                  >
+                    <span>{model}</span>
+                    {selected && <Check className="h-4 w-4 text-teal-300" aria-hidden="true" />}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </div>
       )}
     </div>

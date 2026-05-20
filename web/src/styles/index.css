@@ -89,6 +89,7 @@ summary {
   padding: 0 0.65rem;
   color: #a1a1aa;
   transition: border-color 180ms ease, background 180ms ease;
+  z-index: 90;
 }
 
 .model-picker:focus-within,
@@ -130,14 +131,31 @@ summary {
   position: absolute;
   bottom: calc(100% + 0.5rem);
   left: 0;
-  z-index: 80;
+  z-index: 100;
   width: 15rem;
-  overflow: hidden;
+  max-height: min(18rem, 42vh);
+  overflow-y: auto;
+  overflow-x: hidden;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 0.9rem;
   background: rgba(24, 24, 27, 0.98);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
   padding: 0.35rem;
+}
+
+.model-menu__group + .model-menu__group {
+  margin-top: 0.35rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 0.35rem;
+}
+
+.model-menu__group-label {
+  padding: 0.35rem 0.65rem 0.25rem;
+  color: #71717a;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
 .model-menu__item {

@@ -5,7 +5,7 @@ from loguru import logger
 from app.models.req.agent_req import AgentReq
 from app.models.req.query_req import QueryReq
 from app.models.resp.query_resp import ConversationList, QueryResp
-from app.service.agent_service import chat_stream, chat_delete, chat_query, chat_conversation_list
+from app.service.agent_service import chat_stream, chat_delete, chat_query, chat_conversation_list, chat_model_list
 from common.models.result import Result
 
 agentRouter = APIRouter()
@@ -13,18 +13,11 @@ agentRouter = APIRouter()
 
 @agentRouter.post("/chat/send/stream")
 async def get_chat_stream(req: AgentReq):
-    # client_host = request.client.host if request.client else "unknown"
-    # logger.info(
-    #     f"[chat/stream] client={client_host} thread_id={req.thread_id} "
-    #     f"model={req.model_name} thinking={req.thinking} network={req.is_network}"
-    # )
     return StreamingResponse(await chat_stream(req), media_type="text/html")
 
 
 @agentRouter.post("/chat/query")
 async def get_chat_query(req: QueryReq) -> Result:
-    # client_host = request.client.host if request.client else "unknown"
-    # logger.info(f"[chat/query] client={client_host} thread_id={req.thread_id}")
     if not req.thread_id:
         logger.warning("[chat/query] thread_id is empty")
         return Result(msg="Thread id is required.").failure()
@@ -34,8 +27,6 @@ async def get_chat_query(req: QueryReq) -> Result:
 
 @agentRouter.post("/chat/del")
 async def del_chat_query(req: QueryReq) -> Result:
-    # client_host = request.client.host if request.client else "unknown"
-    # logger.info(f"[chat/del] client={client_host} thread_id={req.thread_id}")
     if not req.thread_id:
         logger.warning("[chat/del] thread_id is empty")
         return Result(msg="Thread id is required.").failure()
@@ -45,8 +36,6 @@ async def del_chat_query(req: QueryReq) -> Result:
 
 @agentRouter.get("/chat/query_list")
 async def get_chat_conversation_list() -> QueryResp:
-    # client_host = request.client.host if request.client else "unknown"
-    # logger.info(f"[chat/query_list] client={client_host}")
     result = await chat_conversation_list()
 
     if result.code != 200:
@@ -59,5 +48,10 @@ async def get_chat_conversation_list() -> QueryResp:
     return QueryResp(code=200, msg="Chat conversation list query succeeded.", data=conversation_list)
 
 
-
+@agentRouter.post("/chat/model_list")
+async def get_chat_model_list() -> Result:
+    """
+    返回模型列表
+    """
+    return await chat_model_list()
 

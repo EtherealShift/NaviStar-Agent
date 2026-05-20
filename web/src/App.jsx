@@ -4,6 +4,7 @@ import {
   deleteConversation,
   fetchConversations,
   fetchMessages,
+  fetchModelList,
   streamChatMessage,
 } from './api/chatApi.js';
 import ChatHeader from './components/ChatHeader.jsx';
@@ -27,6 +28,7 @@ export default function App() {
   const [networkEnabled, setNetworkEnabled] = useState(false);
   const [temperature, setTemperature] = useState(0.7);
   const [modelName, setModelName] = useState('deepseek-v4-flash');
+  const [modelGroups, setModelGroups] = useState({});
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
@@ -35,6 +37,30 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.classList.add('dark');
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadModels() {
+      try {
+        const models = await fetchModelList();
+        if (!mounted) return;
+        setModelGroups(models);
+
+        const allModels = Object.values(models).flat().filter(Boolean);
+        if (allModels.length && !allModels.includes(modelName)) {
+          setModelName(allModels[0]);
+        }
+      } catch (err) {
+        if (mounted) setError(err.message || '模型列表加载失败');
+      }
+    }
+
+    loadModels();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const loadConversationList = async ({ preserveActive = false } = {}) => {
@@ -224,10 +250,11 @@ export default function App() {
           );
         },
         onThinking: (chunk) => {
+          if (!chunk) return;
           updateMessages(threadId, (prev) =>
             prev.map((item) =>
               item.id === assistantMessage.id
-                ? { ...item, thinking: `${item.thinking || ''}${chunk}` }
+                ? { ...item, thinking: `${item.thinking || ''}${chunk}`, status: 'streaming' }
                 : item,
             ),
           );
@@ -333,6 +360,7 @@ export default function App() {
           networkEnabled={networkEnabled}
           temperature={temperature}
           modelName={modelName}
+          modelGroups={modelGroups}
           onChange={setInput}
           onClear={() => setInput('')}
           onSubmit={sendMessage}

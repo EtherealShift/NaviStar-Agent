@@ -48,14 +48,15 @@ async def save_conversation(thread_id: str, messages: list[MessagesConversation]
 
         for i, msg in enumerate(messages, start=1):
             # 保存会话
-            session.add(MessageContent(
+            mc = MessageContent(
                 thread_id=thread_id,
                 group_id=group_id,
                 role=msg.role,
                 content=msg.content,
                 msg_order=i,
-                _meta_data=msg.meta_data,
-            ))
+            )
+            mc.meta_data = msg.meta_data or {}
+            session.add(mc)
         logger.success(f"Messages saved successfully for thread ID: {thread_id}")
     return Result(msg="Conversation saved successfully").success()
 
@@ -89,7 +90,7 @@ async def query_conversation(thread_id: str) -> Result:
                 msg_order=msg.msg_order,
                 meta_data=msg.meta_data,
             )
-            for msg in message_content
+            for msg in message_content if msg.role != "Tool"
         ]
 
     return Result(data=data).success()

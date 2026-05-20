@@ -15,7 +15,7 @@ from loguru import logger
 
 from app.models.resp.query_resp import ConversationList
 from common.memory.memory import get_checkpoint
-from common.models.common_model import AgentModel
+from common.models.common_model import AgentModel, MODEL_LIST
 from common.models.result import Result
 
 
@@ -122,7 +122,6 @@ async def chat_query(thread_id: str) -> Result:
     if result.code != 200:
         return Result(msg=f"Thread {thread_id} query failed.").failure()
 
-    logger.info(f"query result: {result.data}")
     return result
 
 
@@ -154,5 +153,10 @@ async def chat_conversation_list() -> Result:
     return Result(data=conversation_list).success()
 
 
+async def chat_model_list() -> Result:
+    """
+    获取模型列表
+    """
+    return Result(data=MODEL_LIST).success()
 
 

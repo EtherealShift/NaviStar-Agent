@@ -39,6 +39,31 @@ export async function deleteConversation(threadId) {
   await parseJsonResponse(response);
 }
 
+export async function fetchModelList() {
+  const response = await fetch(endpoint('/ai/chat/model_list'), {
+    method: 'POST',
+  });
+  const payload = await parseJsonResponse(response);
+  return payload.data && typeof payload.data === 'object' ? payload.data : {};
+}
+
+function normalizeStreamContent(content) {
+  if (content == null) return '';
+  if (typeof content === 'string') return content;
+  if (typeof content !== 'object') return String(content);
+
+  const knownValue =
+    content.reasoning_content ||
+    content.reasoning ||
+    content.thinking ||
+    content.content ||
+    content.text;
+
+  if (typeof knownValue === 'string') return knownValue;
+  if (knownValue != null) return String(knownValue);
+  return JSON.stringify(content, null, 2);
+}
+
 export async function streamChatMessage({
   threadId,
   message,
@@ -88,8 +113,8 @@ export async function streamChatMessage({
       }
 
       if (payload.error) throw new Error(payload.error);
-      if (payload.type === 'thinking') onThinking?.(payload.content || '');
-      if (payload.type === 'text') onText?.(payload.content || '');
+      if (payload.type === 'thinking') onThinking?.(normalizeStreamContent(payload.content));
+      if (payload.type === 'text') onText?.(normalizeStreamContent(payload.content));
     }
     return false;
   };

@@ -1,4 +1,4 @@
-import { Check, Copy, UserCircle } from 'lucide-react';
+import { Brain, Check, Copy, UserCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
@@ -65,8 +65,12 @@ export default function MessageBubble({ message }) {
   const isUser = message.role === 'user';
 
   const copyMessage = async () => {
-    if (!message.content) return;
-    await navigator.clipboard.writeText(message.content);
+    const copyText =
+      !isUser && message.thinking
+        ? `AI 思考过程:\n${message.thinking}\n\nAI 回复:\n${message.content || ''}`.trim()
+        : message.content;
+    if (!copyText) return;
+    await navigator.clipboard.writeText(copyText);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1400);
   };
@@ -84,13 +88,19 @@ export default function MessageBubble({ message }) {
                 : 'rounded-tl-md border border-white/10 bg-[#242428] text-zinc-100'
           }`}
         >
-          {message.thinking && (
+          {!isUser && message.thinking && (
             <details className="mb-3 rounded-xl border border-orange-400/20 bg-orange-500/10 p-3 text-sm text-orange-100">
-              <summary className="cursor-pointer text-xs font-medium text-orange-200">深度思考过程</summary>
-              <p className="mt-2 whitespace-pre-wrap text-xs leading-6 text-orange-100/80">{message.thinking}</p>
+              <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-medium text-orange-200">
+                <Brain className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>AI 思考过程</span>
+                <span className="ml-auto text-orange-200/60">展开/收起</span>
+              </summary>
+              <p className="mt-2 whitespace-pre-wrap text-xs leading-6 text-orange-100/80">
+                {message.thinking}
+              </p>
             </details>
           )}
-          {message.status === 'loading' && !message.content ? (
+          {!message.content && (message.status === 'loading' || message.status === 'streaming') ? (
             <div className="flex h-7 items-center text-zinc-400">
               <LoadingDots />
             </div>
@@ -113,7 +123,7 @@ export default function MessageBubble({ message }) {
           <button
             type="button"
             onClick={copyMessage}
-            disabled={!message.content}
+            disabled={!message.content && !message.thinking}
             className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-lg px-2 text-xs text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
