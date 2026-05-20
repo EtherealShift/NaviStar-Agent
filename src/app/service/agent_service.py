@@ -72,23 +72,19 @@ async def chat_stream(req: AgentReq):
         try:
             async for event in agent.astream_events(state, config, version="v2"):
                 chunk = event.get("data", {}).get("chunk")
+                logger.info(f"chunk: {chunk}")
                 if chunk and hasattr(chunk, "content") and chunk.content:
-                    reasoning = None
-                    if hasattr(chunk, "additional_kwargs"):
-                        reasoning = chunk.additional_kwargs.get("reasoning_content")
-
-                    if reasoning and isinstance(reasoning, str) and reasoning.strip():
-                        payload = json.dumps(
-                            {"type": "thinking", "content": reasoning},
-                            ensure_ascii=False,
-                        )
-                        yield f"data: {payload}\n\n"
-                    else:
-                        payload = json.dumps(
-                            {"type": "text", "content": chunk.content},
-                            ensure_ascii=False,
-                        )
-                        yield f"data: {payload}\n\n"
+                    payload = json.dumps(
+                        {"type": "text", "content": chunk.content},
+                        ensure_ascii=False,
+                    )
+                    yield f"data: {payload}\n\n"
+                if chunk and hasattr(chunk, "additional_kwargs") and chunk.additional_kwargs:
+                    payload = json.dumps(
+                        {"type": "thinking", "content": chunk.additional_kwargs},
+                        ensure_ascii=False,
+                    )
+                    yield f"data: {payload}\n\n"
             yield "data: [DONE]\n\n"
         except Exception as e:
             logger.error("流式输出异常: {}", e)
@@ -126,7 +122,7 @@ async def chat_query(thread_id: str) -> Result:
     if result.code != 200:
         return Result(msg=f"Thread {thread_id} query failed.").failure()
 
-
+    logger.info(f"query result: {result.data}")
     return result
 
 
@@ -151,8 +147,6 @@ async def chat_conversation_list() -> Result:
             title=item.title,
             created_at=item.created_at,
             updated_at=item.updated_at,
-            is_network=False,
-            is_thinking=False,
         ))
 
 

@@ -22,7 +22,3 @@ class ConversationList(BaseModel):
     created_at: datetime
 
     updated_at: datetime
-
-    is_network: bool = False
-
-    is_thinking: bool = False

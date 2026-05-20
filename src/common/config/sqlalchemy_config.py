@@ -21,7 +21,7 @@ def _get_engine():
     if _engine is None:
         _engine = create_async_engine(
             url=f"sqlite+aiosqlite:///{_DB_PATH.as_posix()}",
-            echo=True,
+            echo=False,
         )
     return _engine
 

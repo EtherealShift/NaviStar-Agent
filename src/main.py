@@ -1,10 +1,12 @@
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
 from common.config.logger_config import setup_logger
 setup_logger()
+load_dotenv()
 from common.config.sqlalchemy_config import create_tables
 
 from app.api.v1.agent import agentRouter

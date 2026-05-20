@@ -53,19 +53,19 @@ class MessageContent(Base):
     msg_order: Mapped[int] = mapped_column(Integer, comment="消息顺序")
 
     _meta_data: Mapped[str] = mapped_column("meta_data", Text, comment="元数据")
-
-    @property
-    def meta_data(self) -> dict:
-        if self._meta_data:
-            try:
-                return json.loads(self._meta_data)
-            except (json.JSONDecodeError, TypeError):
-                return {}
-        return {}
-
-    @meta_data.setter
-    def meta_data(self, value: dict):
-        self._meta_data = json.dumps(value, ensure_ascii=False) if value else "{}"
+    #
+    # @property
+    # def meta_data(self) -> dict:
+    #     if self._meta_data:
+    #         try:
+    #             return json.loads(self._meta_data)
+    #         except (json.JSONDecodeError, TypeError):
+    #             return {}
+    #     return {}
+    #
+    # @meta_data.setter
+    # def meta_data(self, value: dict):
+    #     self._meta_data = json.dumps(value, ensure_ascii=False) if value else "{}"
 
     # parent_msg_id: Mapped[int] = mapped_column(Integer, comment="父消息ID")
 

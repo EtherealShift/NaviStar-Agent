@@ -55,3 +55,20 @@ class MessagesModel:
 
     def to_json(self):
         return json.dumps(self.to_dict())
+
+
+class MessageContentModel(BaseModel):
+    thread_id: str
+    group_id: int
+    role: str
+    content: str
+    msg_order: int
+    created_at: str | None
+    meta_data: dict = Field(default_factory=dict)
+
+
+    def __str__(self):
+        return str(self.__dict__)
+
+    def __repr__(self):
+        return str(self.__dict__)

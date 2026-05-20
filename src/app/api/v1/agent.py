@@ -12,19 +12,19 @@ agentRouter = APIRouter()
 
 
 @agentRouter.post("/chat/send/stream")
-async def get_chat_stream(req: AgentReq, request: Request):
-    client_host = request.client.host if request.client else "unknown"
-    logger.info(
-        f"[chat/stream] client={client_host} thread_id={req.thread_id} "
-        f"model={req.model_name} thinking={req.thinking} network={req.is_network}"
-    )
+async def get_chat_stream(req: AgentReq):
+    # client_host = request.client.host if request.client else "unknown"
+    # logger.info(
+    #     f"[chat/stream] client={client_host} thread_id={req.thread_id} "
+    #     f"model={req.model_name} thinking={req.thinking} network={req.is_network}"
+    # )
     return StreamingResponse(await chat_stream(req), media_type="text/html")
 
 
 @agentRouter.post("/chat/query")
-async def get_chat_query(req: QueryReq, request: Request) -> Result:
-    client_host = request.client.host if request.client else "unknown"
-    logger.info(f"[chat/query] client={client_host} thread_id={req.thread_id}")
+async def get_chat_query(req: QueryReq) -> Result:
+    # client_host = request.client.host if request.client else "unknown"
+    # logger.info(f"[chat/query] client={client_host} thread_id={req.thread_id}")
     if not req.thread_id:
         logger.warning("[chat/query] thread_id is empty")
         return Result(msg="Thread id is required.").failure()
@@ -33,9 +33,9 @@ async def get_chat_query(req: QueryReq, request: Request) -> Result:
 
 
 @agentRouter.post("/chat/del")
-async def del_chat_query(req: QueryReq, request: Request) -> Result:
-    client_host = request.client.host if request.client else "unknown"
-    logger.info(f"[chat/del] client={client_host} thread_id={req.thread_id}")
+async def del_chat_query(req: QueryReq) -> Result:
+    # client_host = request.client.host if request.client else "unknown"
+    # logger.info(f"[chat/del] client={client_host} thread_id={req.thread_id}")
     if not req.thread_id:
         logger.warning("[chat/del] thread_id is empty")
         return Result(msg="Thread id is required.").failure()
@@ -44,9 +44,9 @@ async def del_chat_query(req: QueryReq, request: Request) -> Result:
 
 
 @agentRouter.get("/chat/query_list")
-async def get_chat_conversation_list(request: Request) -> QueryResp:
-    client_host = request.client.host if request.client else "unknown"
-    logger.info(f"[chat/query_list] client={client_host}")
+async def get_chat_conversation_list() -> QueryResp:
+    # client_host = request.client.host if request.client else "unknown"
+    # logger.info(f"[chat/query_list] client={client_host}")
     result = await chat_conversation_list()
 
     if result.code != 200:

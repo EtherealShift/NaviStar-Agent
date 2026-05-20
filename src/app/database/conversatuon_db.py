@@ -5,7 +5,7 @@ from loguru import logger
 from sqlalchemy import select, func, delete, update
 
 from app.models.enty.conversation_messages import MessagesGroup, Conversation, MessageContent
-from app.models.messages_model import MessagesConversation
+from app.models.messages_model import MessagesConversation, MessageContentModel
 from common.config.sqlalchemy_config import db_session
 from common.models.result import Result
 
@@ -54,7 +54,7 @@ async def save_conversation(thread_id: str, messages: list[MessagesConversation]
                 role=msg.role,
                 content=msg.content,
                 msg_order=i,
-                meta_data=msg.meta_data,
+                _meta_data=msg.meta_data,
             ))
         logger.success(f"Messages saved successfully for thread ID: {thread_id}")
     return Result(msg="Conversation saved successfully").success()
@@ -80,16 +80,15 @@ async def query_conversation(thread_id: str) -> Result:
         logger.info(f"Message content: {len(message_content)}, thread_id: {thread_id}")
 
         data = [
-            {
-                "id": msg.id,
-                "thread_id": msg.thread_id,
-                "group_id": msg.group_id,
-                "content": msg.content,
-                "role": msg.role,
-                "created_at": msg.created_at.isoformat() if msg.created_at else None,
-                "msg_order": msg.msg_order,
-                "meta_data": msg.meta_data,
-            }
+            MessageContentModel(
+                thread_id=msg.thread_id,
+                group_id=msg.group_id,
+                content=msg.content,
+                role=msg.role,
+                created_at=msg.created_at.isoformat() if msg.created_at else None,
+                msg_order=msg.msg_order,
+                meta_data=msg.meta_data,
+            )
             for msg in message_content
         ]
 
