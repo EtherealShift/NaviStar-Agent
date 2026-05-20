@@ -1,7 +1,26 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
 const DEFAULT_MODEL = import.meta.env.VITE_DEFAULT_MODEL || 'deepseek-v4-flash';
 
-const endpoint = (path) => `${API_BASE_URL}${path}`;
+let runtimeApiBaseUrl = null;
+let runtimeApiBaseUrlPromise = null;
+
+async function getApiBaseUrl() {
+  if (runtimeApiBaseUrl) return runtimeApiBaseUrl;
+  if (!runtimeApiBaseUrlPromise) {
+    runtimeApiBaseUrlPromise = window.navistar?.getApiBaseUrl?.()
+      .then((url) => {
+        runtimeApiBaseUrl = (url || API_BASE_URL).replace(/\/$/, '');
+        return runtimeApiBaseUrl;
+      })
+      .catch(() => API_BASE_URL);
+  }
+  return runtimeApiBaseUrlPromise;
+}
+
+async function endpoint(path) {
+  const baseUrl = await getApiBaseUrl();
+  return `${baseUrl}${path}`;
+}
 
 async function parseJsonResponse(response) {
   const payload = await response.json().catch(() => null);
@@ -15,13 +34,13 @@ async function parseJsonResponse(response) {
 }
 
 export async function fetchConversations() {
-  const response = await fetch(endpoint('/ai/chat/query_list'));
+  const response = await fetch(await endpoint('/ai/chat/query_list'));
   const payload = await parseJsonResponse(response);
   return Array.isArray(payload.data) ? payload.data : [];
 }
 
 export async function fetchMessages(threadId) {
-  const response = await fetch(endpoint('/ai/chat/query'), {
+  const response = await fetch(await endpoint('/ai/chat/query'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ thread_id: threadId }),
@@ -31,7 +50,7 @@ export async function fetchMessages(threadId) {
 }
 
 export async function deleteConversation(threadId) {
-  const response = await fetch(endpoint('/ai/chat/del'), {
+  const response = await fetch(await endpoint('/ai/chat/del'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ thread_id: threadId }),
@@ -40,11 +59,27 @@ export async function deleteConversation(threadId) {
 }
 
 export async function fetchModelList() {
-  const response = await fetch(endpoint('/ai/chat/model_list'), {
+  const response = await fetch(await endpoint('/ai/chat/model_list'), {
     method: 'POST',
   });
   const payload = await parseJsonResponse(response);
   return payload.data && typeof payload.data === 'object' ? payload.data : {};
+}
+
+export async function fetchSettings() {
+  const response = await fetch(await endpoint('/ai/settings'));
+  const payload = await parseJsonResponse(response);
+  return payload.data || {};
+}
+
+export async function saveSettings(settings) {
+  const response = await fetch(await endpoint('/ai/settings'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  });
+  const payload = await parseJsonResponse(response);
+  return payload.data || {};
 }
 
 function normalizeStreamContent(content) {
@@ -75,7 +110,7 @@ export async function streamChatMessage({
   onThinking,
   signal,
 }) {
-  const response = await fetch(endpoint('/ai/chat/send/stream'), {
+  const response = await fetch(await endpoint('/ai/chat/send/stream'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

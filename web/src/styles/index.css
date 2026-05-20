@@ -281,6 +281,42 @@ summary {
   white-space: nowrap;
 }
 
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.settings-field__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #d4d4d8;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.settings-field__input {
+  height: 2.65rem;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.8rem;
+  background: rgba(0, 0, 0, 0.22);
+  color: #f4f4f5;
+  padding: 0 0.85rem;
+  outline: none;
+  transition: border-color 180ms ease, background 180ms ease;
+}
+
+.settings-field__input:focus {
+  border-color: rgba(45, 212, 191, 0.55);
+  background: rgba(20, 184, 166, 0.06);
+}
+
+.settings-field__input::placeholder {
+  color: #52525b;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

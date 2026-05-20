@@ -19,6 +19,7 @@ export default function Sidebar({
   onDeleteConversation,
   onSelectConversation,
   onSearchChange,
+  onOpenSettings,
 }) {
   return (
     <aside
@@ -134,6 +135,7 @@ export default function Sidebar({
       <div className={`border-t border-white/10 ${collapsed ? 'p-3' : 'p-4'}`}>
         <button
           type="button"
+          onClick={onOpenSettings}
           className="flex h-12 w-full cursor-pointer items-center justify-center gap-3 rounded-xl px-3 text-left transition-colors hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-400"
         >
           <UserCircle className="h-6 w-6 shrink-0 text-zinc-400" aria-hidden="true" />

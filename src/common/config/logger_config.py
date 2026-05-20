@@ -53,16 +53,17 @@ def setup_logger(
     # 移除默认处理器
     logger.remove()
 
-    # 控制台输出
-    logger.add(
-        sys.stderr,
-        format=LOG_FORMAT,
-        level=console_level,
-        colorize=True,
-        backtrace=True,
-        diagnose=True,
-        enqueue=True,  # 异步写入
-    )
+    # 控制台输出。PyInstaller windowed 模式下 sys.stderr 可能为 None。
+    if sys.stderr is not None:
+        logger.add(
+            sys.stderr,
+            format=LOG_FORMAT,
+            level=console_level,
+            colorize=True,
+            backtrace=True,
+            diagnose=True,
+            enqueue=True,  # 异步写入
+        )
 
     # 文件输出
     if enable_file_log:

@@ -5,11 +5,14 @@ import {
   fetchConversations,
   fetchMessages,
   fetchModelList,
+  fetchSettings,
+  saveSettings,
   streamChatMessage,
 } from './api/chatApi.js';
 import ChatHeader from './components/ChatHeader.jsx';
 import ChatInput from './components/ChatInput.jsx';
 import MessageList from './components/MessageList.jsx';
+import SettingsPanel from './components/SettingsPanel.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import {
   createEmptyConversation,
@@ -31,6 +34,10 @@ export default function App() {
   const [modelGroups, setModelGroups] = useState({});
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState(null);
+  const [loadingSettings, setLoadingSettings] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const abortControllerRef = useRef(null);
@@ -302,6 +309,38 @@ export default function App() {
     abortControllerRef.current?.abort();
   };
 
+  const loadSettings = async () => {
+    setLoadingSettings(true);
+    setError('');
+    try {
+      const nextSettings = await fetchSettings();
+      setSettings(nextSettings);
+    } catch (err) {
+      setError(err.message || '设置加载失败');
+    } finally {
+      setLoadingSettings(false);
+    }
+  };
+
+  const openSettings = () => {
+    setSettingsOpen(true);
+    loadSettings();
+  };
+
+  const updateSettings = async (nextSettings) => {
+    setSavingSettings(true);
+    setError('');
+    try {
+      const saved = await saveSettings(nextSettings);
+      setSettings(saved);
+      setSettingsOpen(false);
+    } catch (err) {
+      setError(err.message || '设置保存失败');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-zinc-100 text-zinc-950 dark:bg-[#18181b] dark:text-zinc-100">
       {!sidebarCollapsed && (
@@ -323,6 +362,7 @@ export default function App() {
         onDeleteConversation={removeConversation}
         onSelectConversation={selectConversation}
         onSearchChange={setSearchQuery}
+        onOpenSettings={openSettings}
       />
       <section className="flex min-w-0 flex-1 flex-col">
         <ChatHeader
@@ -371,6 +411,15 @@ export default function App() {
           onModelChange={setModelName}
         />
       </section>
+      <SettingsPanel
+        open={settingsOpen}
+        loading={loadingSettings}
+        saving={savingSettings}
+        settings={settings}
+        onClose={() => setSettingsOpen(false)}
+        onReload={loadSettings}
+        onSave={updateSettings}
+      />
     </div>
   );
 }

@@ -12,10 +12,12 @@ Agent 可调用的工具注册
 """
 
 from typing import Any
+import os
 
 from langchain_core.tools import tool, BaseTool
 from langchain_tavily import TavilySearch
 
+from common.config.settings_config import load_runtime_settings
 from common.utils.tool_utils import geocode_city, get_weather_city
 
 
@@ -40,6 +42,9 @@ async def install_tools() -> list[BaseTool]:
 
 
 def get_network_tools(tools: list[BaseTool]) -> list[BaseTool]:
+    load_runtime_settings()
+    if not os.getenv("TAVILY_API_KEY"):
+        raise RuntimeError("Tavily API Key 未配置，请先在设置中填写联网搜索 Key。")
     tools.append(
         TavilySearch(max_results=5, topic="general")
     )

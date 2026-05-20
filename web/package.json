@@ -8,7 +8,8 @@
     "electron": "cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
     "desktop": "concurrently -k \"npm run dev\" \"wait-on http://127.0.0.1:5173 && npm run electron\"",
     "build": "vite build",
-    "build:desktop": "npm run build && cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ electron-builder --dir",
+    "build:backend": "cd .. && uv run pyinstaller backend.spec --noconfirm --clean",
+    "build:desktop": "npm run build:backend && npm run build && cross-env ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ electron-builder --dir",
     "preview": "vite preview --host 0.0.0.0"
   },
   "main": "electron/main.cjs",
@@ -22,6 +23,12 @@
       "dist/**/*",
       "electron/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist/NaviStarBackend.exe",
+        "to": "backend/NaviStarBackend.exe"
+      }
     ],
     "win": {
       "target": "nsis",

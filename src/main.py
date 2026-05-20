@@ -1,12 +1,13 @@
 from contextlib import asynccontextmanager
 
-from dotenv import load_dotenv
+import uvicorn
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
+from common.config.settings_config import load_runtime_settings
 from common.config.logger_config import setup_logger
 setup_logger()
-load_dotenv()
+load_runtime_settings()
 from common.config.sqlalchemy_config import create_tables
 
 from app.api.v1.agent import agentRouter
@@ -36,3 +37,6 @@ app.add_middleware(
 )
 
 app.include_router(agentRouter, prefix="/ai")
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning")

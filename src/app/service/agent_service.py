@@ -14,6 +14,7 @@ from app.models.req.agent_req import AgentReq
 from loguru import logger
 
 from app.models.resp.query_resp import ConversationList
+from common.config.settings_config import require_deepseek_api_key
 from common.memory.memory import get_checkpoint
 from common.models.common_model import AgentModel, MODEL_LIST
 from common.models.result import Result
@@ -28,48 +29,49 @@ async def chat_stream(req: AgentReq):
     根据请求生成对话流
     :param req:
     """
-    tools = await install_tools()
-
-    thinking: dict[str, str] = {"type": "disabled"}
-
-    if req.thinking:
-        logger.info("Thinking...")
-        thinking = {"type": "enabled"}
-
-    if req.is_network:
-        logger.info("Network tools enabled.")
-        get_network_tools(tools)
-
-    logger.info(f"tools: {[t.name for t in tools]}")
-
-    checkpointer = await get_checkpointer_dep()
-    middlewares = install_middlewares()
-
-    install_after_middlewares(middlewares)
-
-    system_prompt = req.system_prompt or SYSTEM_PROMPT.format(
-        today=datetime.now().strftime("%Y年%m月%d日")
-    )
-
-    model_name = req.model_name or "deepseek-v4-flash"
-
-    agent = create_agent_with(
-        AgentModel(
-            model_name=model_name,
-            system_prompt=system_prompt,
-            tools=tools,
-            checkpointer=checkpointer,
-            middleware=middlewares,
-            temperature=req.temperature,
-            thinking=thinking
-        )
-    )
-
-    state = {"messages": [HumanMessage(content=req.human_message)]}
-    config = {"configurable": {"thread_id": req.thread_id}}
-
     async def event_generator():
         try:
+            require_deepseek_api_key()
+            tools = await install_tools()
+
+            thinking: dict[str, str] = {"type": "disabled"}
+
+            if req.thinking:
+                logger.info("Thinking...")
+                thinking = {"type": "enabled"}
+
+            if req.is_network:
+                logger.info("Network tools enabled.")
+                get_network_tools(tools)
+
+            logger.info(f"tools: {[t.name for t in tools]}")
+
+            checkpointer = await get_checkpointer_dep()
+            middlewares = install_middlewares()
+
+            install_after_middlewares(middlewares)
+
+            system_prompt = req.system_prompt or SYSTEM_PROMPT.format(
+                today=datetime.now().strftime("%Y年%m月%d日")
+            )
+
+            model_name = req.model_name or "deepseek-v4-flash"
+
+            agent = create_agent_with(
+                AgentModel(
+                    model_name=model_name,
+                    system_prompt=system_prompt,
+                    tools=tools,
+                    checkpointer=checkpointer,
+                    middleware=middlewares,
+                    temperature=req.temperature,
+                    thinking=thinking
+                )
+            )
+
+            state = {"messages": [HumanMessage(content=req.human_message)]}
+            config = {"configurable": {"thread_id": req.thread_id}}
+
             async for event in agent.astream_events(state, config, version="v2"):
                 chunk = event.get("data", {}).get("chunk")
                 logger.info(f"chunk: {chunk}")

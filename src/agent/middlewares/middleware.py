@@ -15,6 +15,7 @@ from loguru import logger
 from langchain.agents.middleware import SummarizationMiddleware, after_agent
 from langchain_deepseek import ChatDeepSeek
 
+from common.config.settings_config import require_deepseek_api_key
 
 
 def install_builtin_middlewares():
@@ -22,6 +23,7 @@ def install_builtin_middlewares():
     官方内置中间件：自动摘要对话上下文
     使用独立的 summarization 模型，并设置触发/保留策略。
     """
+    require_deepseek_api_key()
     summarizer = SummarizationMiddleware(
         model=ChatDeepSeek(model="deepseek-v4-flash", temperature=0.7),
         max_tokens_before_summary=3000,
