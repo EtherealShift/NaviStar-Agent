@@ -14,7 +14,10 @@ agentRouter = APIRouter()
 @agentRouter.post("/chat/send/stream")
 async def get_chat_stream(req: AgentReq, request: Request):
     client_host = request.client.host if request.client else "unknown"
-    logger.info(f"[chat/stream] client={client_host} thread_id={req.thread_id} model={req.model_name} thinking={req.thinking}")
+    logger.info(
+        f"[chat/stream] client={client_host} thread_id={req.thread_id} "
+        f"model={req.model_name} thinking={req.thinking} network={req.is_network}"
+    )
     return StreamingResponse(await chat_stream(req), media_type="text/html")
 
 

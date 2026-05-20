@@ -35,6 +35,9 @@ async def chat_stream(req: AgentReq):
     if req.thinking:
         logger.info("Thinking...")
         thinking = {"type": "enabled"}
+
+    if req.is_network:
+        logger.info("Network tools enabled.")
         get_network_tools(tools)
 
     logger.info(f"tools: {[t.name for t in tools]}")

@@ -31,8 +31,5 @@ class AgentReq(BaseModel):
     # 是否联网
     is_network: bool = False
 
-    # 是否深度思考
-    is_thinking: bool = False
-
     # 附件列表
     attachments: list[Attachment] = Field(default_factory=list)

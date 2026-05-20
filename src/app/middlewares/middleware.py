@@ -9,22 +9,14 @@ from app.database.conversatuon_db import save_conversation
 from app.models.messages_model import MessagesModel, MessagesConversation
 
 
-# def _get_title(state: AgentState):
-    # 生成标题
+def _build_conversation_title(content: str) -> str:
+    title = " ".join(content.strip().split())
+    if not title:
+        return "新对话"
 
-    # messages = state.get("messages")
-    # if len(messages) == 1:
-    #     llm = ChatDeepSeek(model="deepseek-v4-flash", temperature=0.7)
-    #     logger.info(f"[中间件] messages: {messages}")
-    #     system_message = SystemMessage(content=f"生成标题,将用户需求变成一个标题，不超过10个字{messages[0]}")
-    #     title = llm.invoke([system_message]).content
-    #     # state.fromkeys("title", title)
-    #     logger.info(f"[中间件] title: {title}")
-    # return None
+    title = title.strip("「」『』“”\"'`，。！？、,.!?;；:：")
+    return title[:24] or "新对话"
 
-# @before_agent
-# def get_title(state: AgentState, runtime: Runtime, *_args, **_kwargs):
-#     _get_title(state)
 
 async def _save_conversation(state: AgentState, runtime: Runtime):
     messages = state.get("messages")
@@ -45,6 +37,10 @@ async def _save_conversation(state: AgentState, runtime: Runtime):
         return
 
     recent_messages = messages[last_human_idx:]
+    human_content = messages[last_human_idx].content
+    if not isinstance(human_content, str):
+        human_content = str(human_content)
+    conversation_title = _build_conversation_title(human_content)
 
     records: list[MessagesModel] = []
 
@@ -79,7 +75,12 @@ async def _save_conversation(state: AgentState, runtime: Runtime):
 
     for record in records:
         messages_conversation.append(
-            MessagesConversation(role=record.role, content=record.content, thread_id=thread_id)
+            MessagesConversation(
+                role=record.role,
+                content=record.content,
+                thread_id=thread_id,
+                title=conversation_title,
+            )
         )
 
     await save_conversation(thread_id=thread_id, messages=messages_conversation)
@@ -94,5 +95,4 @@ async def save_conversation_middleware(state: AgentState, runtime: Runtime, *_ar
 
 def install_after_middlewares(middlewares):
 
-    # middlewares.append(get_title)
     middlewares.append(save_conversation_middleware)

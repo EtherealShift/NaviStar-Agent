@@ -2,7 +2,7 @@
 会话数据库
 """
 from loguru import logger
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, update
 
 from app.models.enty.conversation_messages import MessagesGroup, Conversation, MessageContent
 from app.models.messages_model import MessagesConversation
@@ -21,12 +21,24 @@ async def save_conversation(thread_id: str, messages: list[MessagesConversation]
         result = await session.execute(
             select(func.max(MessagesGroup.id)).where(MessagesGroup.thread_id == thread_id))
         group_id = result.scalar() or 0
+        title = messages[0].title or _build_fallback_title(messages[0].content)
+
         if group_id == 0:
             session.add(Conversation(
                 thread_id=thread_id,
-                title=messages[0].title,
+                title=title,
             ))
             await session.flush()
+        else:
+            existing_title = await session.scalar(
+                select(Conversation.title).where(Conversation.thread_id == thread_id)
+            )
+            if not existing_title or existing_title == "新对话":
+                await session.execute(
+                    update(Conversation)
+                    .where(Conversation.thread_id == thread_id)
+                    .values(title=title)
+                )
 
         msg_group = MessagesGroup(thread_id=thread_id)
         session.add(msg_group)
@@ -46,6 +58,12 @@ async def save_conversation(thread_id: str, messages: list[MessagesConversation]
             ))
         logger.success(f"Messages saved successfully for thread ID: {thread_id}")
     return Result(msg="Conversation saved successfully").success()
+
+
+def _build_fallback_title(content: str) -> str:
+    title = " ".join((content or "").strip().split())
+    title = title.strip("「」『』“”\"'`，。！？、,.!?;；:：")
+    return title[:24] or "新对话"
 
 
 
@@ -99,7 +117,7 @@ async def get_query_content_list() -> Result:
     """
     async with db_session() as session:
         result = await session.execute(
-            select(Conversation).order_by(Conversation.created_at)
+            select(Conversation).order_by(Conversation.updated_at.desc())
         )
         conversations: list[Conversation] = result.scalars().all()
 
