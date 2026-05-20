@@ -14,6 +14,7 @@ from app.models.req.agent_req import AgentReq
 from loguru import logger
 
 from app.models.resp.query_resp import ConversationList
+from app.tools.mcp_tools import mcp_build_tools
 from common.config.settings_config import require_deepseek_api_key
 from common.memory.memory import get_checkpoint
 from common.models.common_model import AgentModel, MODEL_LIST
@@ -45,7 +46,7 @@ async def chat_stream(req: AgentReq):
                 get_network_tools(tools)
 
             logger.info(f"tools: {[t.name for t in tools]}")
-
+            tools.extend(await mcp_build_tools())
             checkpointer = await get_checkpointer_dep()
             middlewares = install_middlewares()
 
@@ -74,7 +75,6 @@ async def chat_stream(req: AgentReq):
 
             async for event in agent.astream_events(state, config, version="v2"):
                 chunk = event.get("data", {}).get("chunk")
-                logger.info(f"chunk: {chunk}")
                 if chunk and hasattr(chunk, "content") and chunk.content:
                     payload = json.dumps(
                         {"type": "text", "content": chunk.content},

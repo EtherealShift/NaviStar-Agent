@@ -35,7 +35,7 @@ class InterceptHandler(logging.Handler):
 
 
 def setup_logger(
-        console_level: str = "DEBUG",
+        console_level: str = "INFO",
         file_level: str = "INFO",
         enable_file_log: bool = True,
 ):

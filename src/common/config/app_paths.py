@@ -30,6 +30,7 @@ DATA_HOME = _data_home() if IS_PRODUCTION else PROJECT_ROOT
 DB_DIR = DATA_HOME / "db"
 LOG_DIR = DATA_HOME / "logs"
 ENV_PATH = DATA_HOME / ".env"
+MCP_TOOLS_PATH = DATA_HOME / "mcp_tools.json"
 
 for directory in (DB_DIR, LOG_DIR):
     directory.mkdir(parents=True, exist_ok=True)

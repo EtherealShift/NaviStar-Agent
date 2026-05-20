@@ -1,12 +1,21 @@
 const { app, BrowserWindow, shell, ipcMain } = require('electron');
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const path = require('node:path');
 const net = require('node:net');
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 const DEFAULT_BACKEND_PORT = 8000;
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
 let backendProcess = null;
+let backendPid = null;
 let backendPort = DEFAULT_BACKEND_PORT;
+let backendExecutablePath = null;
+let mainWindow = null;
+let backendStopping = false;
+
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
 
 function backendBaseUrl() {
   return `http://127.0.0.1:${backendPort}`;
@@ -47,6 +56,7 @@ async function startBackend() {
   const backendPath = process.platform === 'win32'
     ? path.join(process.resourcesPath, 'backend', 'NaviStarBackend.exe')
     : path.join(process.resourcesPath, 'backend', 'NaviStarBackend');
+  backendExecutablePath = backendPath;
   backendProcess = spawn(
     backendPath,
     [],
@@ -56,6 +66,7 @@ async function startBackend() {
         ...process.env,
         NAVISTAR_PRODUCTION: '1',
         NAVISTAR_BACKEND_PORT: String(backendPort),
+        NAVISTAR_PARENT_PID: String(process.pid),
       },
       windowsHide: true,
       stdio: 'ignore',
@@ -64,7 +75,9 @@ async function startBackend() {
 
   backendProcess.on('exit', () => {
     backendProcess = null;
+    backendPid = null;
   });
+  backendPid = backendProcess.pid;
 }
 
 async function waitForBackend(timeoutMs = 15000) {
@@ -77,13 +90,58 @@ async function waitForBackend(timeoutMs = 15000) {
 }
 
 function stopBackend() {
-  if (!backendProcess) return;
-  backendProcess.kill();
+  if (backendStopping) return;
+  backendStopping = true;
+
+  const pid = backendPid || backendProcess?.pid;
+  if (!pid && !backendExecutablePath) {
+    backendStopping = false;
+    return;
+  }
+
+  if (process.platform === 'win32') {
+    if (pid) {
+      spawnSync('taskkill.exe', ['/PID', String(pid), '/T', '/F'], {
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+    }
+    if (backendExecutablePath) {
+      const escapedPath = backendExecutablePath.replace(/'/g, "''");
+      spawnSync('powershell.exe', [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-Command',
+        `Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'NaviStarBackend.exe' -and $_.ExecutablePath -eq '${escapedPath}' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`,
+      ], {
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+    }
+  } else {
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch {
+      // Process already exited.
+    }
+  }
+
   backendProcess = null;
+  backendPid = null;
+  backendStopping = false;
 }
 
-function createWindow() {
-  const mainWindow = new BrowserWindow({
+async function showApp(mainWindow) {
+  if (isDev) {
+    await mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+  } else {
+    await mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
+  }
+}
+
+async function createWindow() {
+  mainWindow = new BrowserWindow({
     width: 1320,
     height: 860,
     minWidth: 1080,
@@ -110,26 +168,44 @@ function createWindow() {
   });
 
   if (isDev) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+    await showApp(mainWindow);
   } else {
-    mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
+    await mainWindow.loadFile(path.join(__dirname, 'startup.html'));
   }
+
+  mainWindow.on('close', () => {
+    if (!isDev) stopBackend();
+  });
+
+  return mainWindow;
 }
 
 app.whenReady().then(async () => {
   ipcMain.handle('app:get-version', () => app.getVersion());
   ipcMain.handle('app:get-api-base-url', () => backendBaseUrl());
-  try {
-    await startBackend();
-    if (!isDev) waitForBackend();
-  } catch (error) {
-    console.error('Failed to start backend:', error);
+  const createdWindow = await createWindow();
+
+  if (!isDev) {
+    try {
+      await startBackend();
+      await waitForBackend();
+    } catch (error) {
+      console.error('Failed to start backend:', error);
+    }
+    if (!createdWindow.isDestroyed()) {
+      await showApp(createdWindow);
+    }
   }
-  createWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on('second-instance', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.focus();
 });
 
 app.on('window-all-closed', () => {
@@ -138,4 +214,22 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   stopBackend();
+});
+
+app.on('quit', () => {
+  stopBackend();
+});
+
+process.on('exit', () => {
+  stopBackend();
+});
+
+process.on('SIGINT', () => {
+  stopBackend();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  stopBackend();
+  process.exit(0);
 });

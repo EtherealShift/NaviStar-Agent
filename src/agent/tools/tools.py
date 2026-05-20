@@ -14,6 +14,7 @@ Agent 可调用的工具注册
 from typing import Any
 import os
 
+import requests
 from langchain_core.tools import tool, BaseTool
 from langchain_tavily import TavilySearch
 
@@ -33,11 +34,23 @@ async def get_weather(city: str, adcode: str = ""):
     return await get_weather_city(city, adcode=adcode)
 
 
+@tool(description="用于获取用户当前的地理位置, ip为空则获取当前公网IP位置")
+async def get_location_by_ip(ip=""):
+    url = f"http://ip-api.com/json/{ip}"
+    res = requests.get(url)
+    data = res.json()
+    return {
+        "国家": data.get("country"),
+        "城市": data.get("city"),
+        "经纬度": (data.get("lat"), data.get("lon"))
+    }
+
 async def install_tools() -> list[BaseTool]:
     """收集所有工具，供 Agent 使用。"""
     return [
         get_geocode,
         get_weather,
+        get_location_by_ip,
     ]
 
 

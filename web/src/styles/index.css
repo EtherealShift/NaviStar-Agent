@@ -287,6 +287,48 @@ summary {
   gap: 0.55rem;
 }
 
+.settings-tabs {
+  display: inline-flex;
+  gap: 0.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.9rem;
+  background: rgba(0, 0, 0, 0.18);
+  padding: 0.25rem;
+}
+
+.settings-tab {
+  display: inline-flex;
+  height: 2.25rem;
+  cursor: pointer;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 0.7rem;
+  padding: 0 0.8rem;
+  color: #a1a1aa;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: background 180ms ease, color 180ms ease;
+}
+
+.settings-tab:hover,
+.settings-tab[aria-selected="true"] {
+  background: rgba(20, 184, 166, 0.14);
+  color: #ccfbf1;
+}
+
+.settings-tab__badge {
+  display: inline-flex;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(34, 211, 238, 0.18);
+  color: #a5f3fc;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
 .settings-field__label {
   display: inline-flex;
   align-items: center;
@@ -315,6 +357,28 @@ summary {
 
 .settings-field__input::placeholder {
   color: #52525b;
+}
+
+.settings-field__textarea {
+  min-height: 16rem;
+  max-height: 44vh;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.8rem;
+  background: rgba(0, 0, 0, 0.24);
+  color: #f4f4f5;
+  padding: 0.85rem;
+  font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.65;
+  outline: none;
+  transition: border-color 180ms ease, background 180ms ease;
+}
+
+.settings-field__textarea:focus {
+  border-color: rgba(45, 212, 191, 0.55);
+  background: rgba(20, 184, 166, 0.06);
 }
 
 ::-webkit-scrollbar {

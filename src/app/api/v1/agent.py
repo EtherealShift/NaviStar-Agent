@@ -21,7 +21,6 @@ async def get_chat_stream(req: AgentReq):
 @agentRouter.post("/chat/query")
 async def get_chat_query(req: QueryReq) -> Result:
     if not req.thread_id:
-        logger.warning("[chat/query] thread_id is empty")
         return Result(msg="Thread id is required.").failure()
 
     return await chat_query(req.thread_id)
@@ -30,7 +29,6 @@ async def get_chat_query(req: QueryReq) -> Result:
 @agentRouter.post("/chat/del")
 async def del_chat_query(req: QueryReq) -> Result:
     if not req.thread_id:
-        logger.warning("[chat/del] thread_id is empty")
         return Result(msg="Thread id is required.").failure()
 
     return await chat_delete(req.thread_id)
@@ -41,7 +39,6 @@ async def get_chat_conversation_list() -> QueryResp:
     result = await chat_conversation_list()
 
     if result.code != 200:
-        logger.error(f"[chat/query_list] failed: {result.msg}")
         return QueryResp(code=result.code, msg=result.msg)
 
     conversation_list: list[ConversationList] = result.data
