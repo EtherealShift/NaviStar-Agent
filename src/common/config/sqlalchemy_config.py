@@ -1,15 +1,15 @@
-from pathlib import Path
 from contextlib import asynccontextmanager
 from loguru import logger
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
+from common.config.app_paths import DB_DIR
+
 # 确保所有实体模型被导入，以便 Base.metadata 包含所有表定义
 from app.models.enty.conversation_messages import Conversation, MessagesGroup, MessageContent  # noqa: F401
 from app.models.enty.base import Base
 
-_DB_PATH = Path(__file__).resolve().parent.parent.parent.joinpath("resources", "db", "navistar.db")
-_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+_DB_PATH = DB_DIR / "navistar.db"
 
 _engine = None
 _SessionFactory = None

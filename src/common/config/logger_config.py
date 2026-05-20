@@ -1,30 +1,9 @@
 import logging
 import sys
-from pathlib import Path
 
 from loguru import logger
 
-
-def get_log_dir() -> Path:
-    """获取日志目录路径"""
-    return Path(LOG_DIR)
-
-
-def find_project_root(current_path: Path, marker: str = "src") -> Path:
-    """查找项目根目录"""
-    for parent in current_path.parents:
-        if (parent / ".git").exists() or (parent / "pyproject.toml").exists():
-            return parent
-        if parent.name == marker:
-            return parent.parent
-    return current_path.parent
-
-
-# 初始化日志目录
-_current_file = Path(__file__).resolve()
-PROJECT_ROOT = find_project_root(_current_file)
-LOG_DIR = PROJECT_ROOT / "logs"
-LOG_DIR.mkdir(parents=True, exist_ok=True)
+from common.config.app_paths import LOG_DIR
 
 # 日志格式
 LOG_FORMAT = (
@@ -141,7 +120,6 @@ def setup_logger(
 
 
 if __name__ == "__main__":
-    print(f"项目根目录: {PROJECT_ROOT}")
     print(f"日志目录: {LOG_DIR}")
 
     # 测试日志
