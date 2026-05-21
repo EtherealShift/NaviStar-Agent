@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NaviStar 启动中</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        background: #111113;
+        font-family:
+          Inter, "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont,
+          sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 28% 24%, rgba(20, 184, 166, 0.16), transparent 32%),
+          linear-gradient(135deg, #111113 0%, #17171b 52%, #101113 100%);
+        color: #f4f4f5;
+      }
+
+      .shell {
+        display: grid;
+        min-height: 100vh;
+        place-items: center;
+        padding: 32px;
+      }
+
+      .panel {
+        display: flex;
+        width: min(440px, 100%);
+        flex-direction: column;
+        align-items: center;
+        gap: 22px;
+        text-align: center;
+      }
+
+      .mark {
+        display: grid;
+        width: 72px;
+        height: 72px;
+        place-items: center;
+        border: 1px solid rgba(94, 234, 212, 0.36);
+        border-radius: 18px;
+        background: rgba(20, 184, 166, 0.16);
+        box-shadow: 0 22px 70px rgba(20, 184, 166, 0.14);
+      }
+
+      .mark span {
+        color: #ccfbf1;
+        font-size: 32px;
+        font-weight: 800;
+        line-height: 1;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 26px;
+        font-weight: 760;
+        letter-spacing: 0;
+      }
+
+      p {
+        margin: 8px 0 0;
+        color: #a1a1aa;
+        font-size: 14px;
+        line-height: 1.7;
+      }
+
+      .bar {
+        position: relative;
+        width: min(320px, 80vw);
+        height: 4px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .bar::before {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: -40%;
+        width: 40%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, transparent, #2dd4bf, #67e8f9, transparent);
+        content: "";
+        animation: slide 1.25s ease-in-out infinite;
+      }
+
+      .status {
+        min-height: 20px;
+        color: #71717a;
+        font-size: 12px;
+      }
+
+      @keyframes slide {
+        to {
+          left: 100%;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .bar::before {
+          animation: none;
+          left: 0;
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel" aria-live="polite">
+        <div class="mark" aria-hidden="true">
+          <span>N</span>
+        </div>
+        <div>
+          <h1>NaviStar</h1>
+          <p>正在启动本地后端服务，请稍候。</p>
+        </div>
+        <div class="bar" aria-hidden="true"></div>
+        <div class="status">初始化应用数据目录与模型服务...</div>
+      </section>
+    </main>
+  </body>
+</html>
