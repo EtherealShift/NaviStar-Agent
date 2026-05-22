@@ -18,6 +18,7 @@ import requests
 from langchain_core.tools import tool, BaseTool
 from langchain_tavily import TavilySearch
 
+from app.tools.captured_tools import douyin_fetch_video_detail, douyin_fetch_video_list
 from common.config.settings_config import load_runtime_settings
 from common.utils.tool_utils import geocode_city, get_weather_city
 
@@ -51,6 +52,8 @@ async def install_tools() -> list[BaseTool]:
         get_geocode,
         get_weather,
         get_location_by_ip,
+        douyin_fetch_video_detail,
+        douyin_fetch_video_list
     ]
 
 

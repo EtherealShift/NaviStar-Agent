@@ -51,7 +51,7 @@ async def chat_stream(req: AgentReq):
             middlewares = install_middlewares()
 
             install_after_middlewares(middlewares)
-
+            logger.info(f"tools: {[t.name for t in tools]}")
             system_prompt = req.system_prompt or SYSTEM_PROMPT.format(
                 today=datetime.now().strftime("%Y年%m月%d日")
             )
@@ -89,8 +89,11 @@ async def chat_stream(req: AgentReq):
                     yield f"data: {payload}\n\n"
             yield "data: [DONE]\n\n"
         except Exception as e:
-            logger.error("流式输出异常: {}", e)
-            yield f'data: {{"error": "{e}"}}\n\n'
+            ex_msg = str(e)
+            if hasattr(e, 'exceptions'):
+                ex_msg = str(e.exceptions)
+            logger.error("流式输出异常: {}", ex_msg)
+            yield f'data: {{"error": "{ex_msg}"}}\n\n'
 
     return event_generator()
 

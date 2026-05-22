@@ -1,4 +1,5 @@
 from langchain_mcp_adapters.client import MultiServerMCPClient
+from loguru import logger
 
 from common.config.mcp_config import read_mcp_config
 
@@ -18,5 +19,9 @@ async def mcp_build_tools():
             else:
                 mcp[mcp_server_name][key] = value
 
-    client = MultiServerMCPClient(mcp)
-    return await client.get_tools()
+    try:
+        client = MultiServerMCPClient(mcp)
+        return await client.get_tools()
+    except Exception as e:
+        logger.error("MCP 工具加载失败: {}", e)
+        return []
