@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from common.config.constants import DEFAULT_MODEL_NAME
+
 
 class Attachment(BaseModel):
     filename: str
@@ -11,7 +13,7 @@ class Attachment(BaseModel):
 class AgentReq(BaseModel):
 
     # 模型名称
-    model_name: str = "deepseek-v4-flash"
+    model_name: str = DEFAULT_MODEL_NAME
 
     # 消息
     human_message: str

@@ -15,9 +15,10 @@ from loguru import logger
 
 from app.models.resp.query_resp import ConversationList
 from app.tools.mcp_tools import mcp_build_tools
+from common.config.constants import DEFAULT_MODEL_NAME, MODEL_LIST
 from common.config.settings_config import require_deepseek_api_key
 from common.memory.memory import get_checkpoint
-from common.models.common_model import AgentModel, MODEL_LIST
+from common.models.common_model import AgentModel
 from common.models.result import Result
 
 
@@ -56,7 +57,7 @@ async def chat_stream(req: AgentReq):
                 today=datetime.now().strftime("%Y年%m月%d日")
             )
 
-            model_name = req.model_name or "deepseek-v4-flash"
+            model_name = req.model_name or DEFAULT_MODEL_NAME
 
             agent = create_agent_with(
                 AgentModel(

@@ -1,6 +1,7 @@
 from app.models.req.settings_req import SettingsReq
 from common.config.mcp_config import public_mcp_config, read_mcp_config, save_mcp_config
 from common.config.settings_config import public_settings, read_settings, save_settings
+from common.config.constants import ENV_DEEPSEEK_API_KEY, ENV_TAVILY_API_KEY
 from common.models.result import Result
 
 
@@ -16,9 +17,9 @@ async def update_settings(req: SettingsReq) -> Result:
     tavily = req.tools.get("TAVILY") or req.tools.get("tavily")
 
     if deepseek is not None:
-        values["DEEPSEEK_API_KEY"] = deepseek.api_key
+        values[ENV_DEEPSEEK_API_KEY] = deepseek.api_key
     if tavily is not None:
-        values["TAVILY_API_KEY"] = tavily.api_key
+        values[ENV_TAVILY_API_KEY] = tavily.api_key
 
     settings = save_settings(values)
     mcp_config = read_mcp_config()

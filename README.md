@@ -37,11 +37,12 @@ NaviStar-Agent/
 │   │   ├── database/                 # SQLite 数据库操作
 │   │   └── models/                   # 数据模型（实体/请求/响应）
 │   │
-│   └── common/                       # 公共基础设施
+│   ├── common/                       # 公共基础设施
 │       ├── config/                   # 配置管理（路径/设置/日志/数据库）
 │       ├── memory/memory.py          # LangGraph 检查点持久化
 │       ├── models/                   # 通用模型与统一响应格式
 │       └── utils/                    # 外部 API 工具函数
+│   └── resources/                    # 后端静态资源文件
 │
 ├── web/                              # Electron + React 前端
 │   ├── electron/
@@ -106,8 +107,10 @@ cd NaviStar-Agent
 在项目根目录创建 `.env` 文件：
 
 ```env
+NAVISTAR_ENV=development
 DEEPSEEK_API_KEY=your_deepseek_api_key
 TAVILY_API_KEY=your_tavily_api_key   # 可选，用于联网搜索
+ONE_API_KEY=your_one_api_key         # 可选，用于抖音工具
 ```
 
 ### 4. 安装依赖
@@ -171,9 +174,11 @@ npm run build:desktop
 
 ## 项目配置
 
-- **开发模式** — 配置从项目根目录 `.env` 加载
-- **生产模式** (PyInstaller 打包后) — 配置从 `%APPDATA%/NaviStar/.env` 加载
-- **MCP 工具** — 通过 `mcp_tools.json` 配置，支持 `streamable_http` 传输
+- **统一配置入口** — 后端通过 `pydantic-settings` 加载环境变量，入口为 `common.config.app_settings.get_app_settings()`
+- **开发模式** — `NAVISTAR_ENV=development`，配置从项目根目录 `.env` 加载，数据写入项目根目录下的 `db/`、`logs/`
+- **生产模式** — `NAVISTAR_ENV=production`、`NAVISTAR_PRODUCTION=1` 或 PyInstaller 打包后，配置从 `%APPDATA%/NaviStar/.env` 加载
+- **运行时设置** — 前端设置面板保存 API Key 到当前环境的 `.env`，MCP 配置保存到当前环境的 `mcp_tools.json`
+- **后端资源** — 包内 JSON 等静态资源统一放在 `src/resources/`，PyInstaller 会打包到后端 `resources/` 目录
 
 ## License
 

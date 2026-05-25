@@ -1,36 +1,21 @@
-import os
-import sys
 from pathlib import Path
 
-
-APP_NAME = "NaviStar"
-
-
-def _project_root() -> Path:
-    here = Path(__file__).resolve()
-    for parent in here.parents:
-        if (parent / "pyproject.toml").exists() or (parent / ".git").exists():
-            return parent
-    return here.parents[3]
+from common.config.app_settings import get_app_settings
+from common.config.constants import APP_NAME as DEFAULT_APP_NAME
 
 
-def _data_home() -> Path:
-    if sys.platform == "win32":
-        base = Path(os.getenv("APPDATA") or Path.home() / "AppData" / "Roaming")
-    elif sys.platform == "darwin":
-        base = Path.home() / "Library" / "Application Support"
-    else:
-        base = Path(os.getenv("XDG_DATA_HOME") or Path.home() / ".local" / "share")
-    return base / APP_NAME
+_settings = get_app_settings()
+
+APP_NAME = _settings.app_name or DEFAULT_APP_NAME
+IS_PRODUCTION = _settings.is_production
+PROJECT_ROOT = _settings.project_root
+DATA_HOME = _settings.data_home
+DB_DIR = _settings.db_dir
+LOG_DIR = _settings.log_dir
+ENV_PATH = _settings.env_path
+MCP_TOOLS_PATH = _settings.mcp_tools_path
+RESOURCES_DIR = _settings.resources_dir
 
 
-IS_PRODUCTION = os.getenv("NAVISTAR_PRODUCTION") == "1" or bool(getattr(sys, "frozen", False))
-PROJECT_ROOT = None if IS_PRODUCTION else _project_root()
-DATA_HOME = _data_home() if IS_PRODUCTION else PROJECT_ROOT
-DB_DIR = DATA_HOME / "db"
-LOG_DIR = DATA_HOME / "logs"
-ENV_PATH = DATA_HOME / ".env"
-MCP_TOOLS_PATH = DATA_HOME / "mcp_tools.json"
-
-for directory in (DB_DIR, LOG_DIR):
-    directory.mkdir(parents=True, exist_ok=True)
+def resource_path(filename: str) -> Path:
+    return get_app_settings().resource_path(filename)

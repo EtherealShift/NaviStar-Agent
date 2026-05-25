@@ -5,6 +5,9 @@ import time
 
 import uvicorn
 
+from common.config.app_settings import get_app_settings
+from common.config.constants import ENV_PARENT_PID
+
 
 if sys.stdout is None:
     sys.stdout = open(os.devnull, "w", encoding="utf-8")
@@ -40,7 +43,7 @@ def _is_process_running(pid: int) -> bool:
 
 
 def _watch_parent_process() -> None:
-    parent_pid = int(os.getenv("NAVISTAR_PARENT_PID", "0") or "0")
+    parent_pid = int(os.getenv(ENV_PARENT_PID, "0") or "0")
     if not parent_pid:
         return
 
@@ -51,8 +54,8 @@ def _watch_parent_process() -> None:
 
 
 if __name__ == "__main__":
-    if os.getenv("NAVISTAR_PARENT_PID"):
+    if os.getenv(ENV_PARENT_PID):
         threading.Thread(target=_watch_parent_process, daemon=True).start()
 
-    port = int(os.getenv("NAVISTAR_BACKEND_PORT", "8000"))
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    settings = get_app_settings()
+    uvicorn.run(app, host=settings.backend_host, port=settings.backend_port, log_level="warning")

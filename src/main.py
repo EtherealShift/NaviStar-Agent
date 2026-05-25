@@ -4,6 +4,8 @@ import uvicorn
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
+from common.config.app_settings import get_app_settings
+from common.config.constants import API_DESCRIPTION, API_TITLE, API_VERSION
 from common.config.settings_config import load_runtime_settings
 from common.config.logger_config import setup_logger
 setup_logger()
@@ -21,9 +23,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Agent Chat API",
-    description="小星智能对话服务",
-    version="1.0.0",
+    title=API_TITLE,
+    description=API_DESCRIPTION,
+    version=API_VERSION,
     lifespan=lifespan,
 )
 
@@ -39,4 +41,5 @@ app.add_middleware(
 app.include_router(agentRouter, prefix="/ai")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning")
+    settings = get_app_settings()
+    uvicorn.run(app, host=settings.backend_host, port=settings.backend_port, log_level="warning")

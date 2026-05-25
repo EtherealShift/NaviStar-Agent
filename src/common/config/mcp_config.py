@@ -2,10 +2,11 @@ import json
 from copy import deepcopy
 from typing import Any
 
-from common.config.app_paths import MCP_TOOLS_PATH
+from common.config.app_paths import MCP_TOOLS_PATH, resource_path
+from common.config.constants import DEFAULT_MCP_TOOLS_FILENAME
 
 
-DEFAULT_MCP_CONFIG = {
+DEFAULT_MCP_CONFIG: dict[str, Any] = {
     "mcpServers": {},
 }
 
@@ -13,7 +14,7 @@ DEFAULT_MCP_CONFIG = {
 def ensure_mcp_config_file() -> None:
     MCP_TOOLS_PATH.parent.mkdir(parents=True, exist_ok=True)
     if not MCP_TOOLS_PATH.exists():
-        save_mcp_config(DEFAULT_MCP_CONFIG)
+        save_mcp_config(_default_mcp_config())
 
 
 def read_mcp_config() -> dict[str, Any]:
@@ -51,3 +52,20 @@ def public_mcp_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
         "config": current,
         "server_count": len(servers) if isinstance(servers, dict) else 0,
     }
+
+
+def _default_mcp_config() -> dict[str, Any]:
+    template_path = resource_path(DEFAULT_MCP_TOOLS_FILENAME)
+    if not template_path.exists():
+        return deepcopy(DEFAULT_MCP_CONFIG)
+
+    try:
+        config = json.loads(template_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return deepcopy(DEFAULT_MCP_CONFIG)
+
+    if not isinstance(config, dict):
+        return deepcopy(DEFAULT_MCP_CONFIG)
+    if not isinstance(config.get("mcpServers"), dict):
+        config["mcpServers"] = {}
+    return config

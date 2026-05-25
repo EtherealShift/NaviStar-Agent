@@ -15,6 +15,7 @@ from loguru import logger
 from langchain.agents.middleware import SummarizationMiddleware, after_agent
 from langchain_deepseek import ChatDeepSeek
 
+from common.config.constants import DEFAULT_MODEL_NAME
 from common.config.settings_config import require_deepseek_api_key
 
 
@@ -25,7 +26,7 @@ def install_builtin_middlewares():
     """
     require_deepseek_api_key()
     summarizer = SummarizationMiddleware(
-        model=ChatDeepSeek(model="deepseek-v4-flash", temperature=0.7),
+        model=ChatDeepSeek(model=DEFAULT_MODEL_NAME, temperature=0.7),
         max_tokens_before_summary=3000,
         messages_to_keep=20,
     )

@@ -30,7 +30,7 @@ a = Analysis(
     ["src/backend_main.py"],
     pathex=["src"],
     binaries=[],
-    datas=[],
+    datas=[("src/resources", "resources")],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
