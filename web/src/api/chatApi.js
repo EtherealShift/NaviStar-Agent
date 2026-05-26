@@ -7,7 +7,8 @@ let runtimeApiBaseUrlPromise = null;
 async function getApiBaseUrl() {
   if (runtimeApiBaseUrl) return runtimeApiBaseUrl;
   if (!runtimeApiBaseUrlPromise) {
-    runtimeApiBaseUrlPromise = window.navistar?.getApiBaseUrl?.()
+    const runtimeGetter = window.navistar?.getApiBaseUrl;
+    runtimeApiBaseUrlPromise = (runtimeGetter ? runtimeGetter() : Promise.resolve(API_BASE_URL))
       .then((url) => {
         runtimeApiBaseUrl = (url || API_BASE_URL).replace(/\/$/, '');
         return runtimeApiBaseUrl;
@@ -22,10 +23,19 @@ async function endpoint(path) {
   return `${baseUrl}${path}`;
 }
 
+export async function resolveApiUrl(path) {
+  if (!path) return '';
+  if (/^https?:\/\//i.test(path)) return path;
+  return endpoint(path.startsWith('/') ? path : `/${path}`);
+}
+
 async function parseJsonResponse(response) {
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error(payload?.msg || `HTTP ${response.status}`);
+  }
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('接口返回为空');
   }
   if (payload?.code && payload.code !== 200) {
     throw new Error(payload.msg || '请求失败');
@@ -82,6 +92,21 @@ export async function saveSettings(settings) {
   return payload.data || {};
 }
 
+export async function uploadFiles(files = []) {
+  const selectedFiles = Array.from(files).filter(Boolean);
+  if (!selectedFiles.length) return [];
+
+  const formData = new FormData();
+  selectedFiles.forEach((file) => formData.append('files', file));
+
+  const response = await fetch(await endpoint('/ai/files/upload'), {
+    method: 'POST',
+    body: formData,
+  });
+  const payload = await parseJsonResponse(response);
+  return Array.isArray(payload.data?.files) ? payload.data.files : [];
+}
+
 function normalizeStreamContent(content) {
   if (content == null) return '';
   if (typeof content === 'string') return content;
@@ -106,8 +131,10 @@ export async function streamChatMessage({
   thinking = false,
   temperature = 0.7,
   isNetwork = false,
+  attachments = [],
   onText,
   onThinking,
+  onFile,
   signal,
 }) {
   const response = await fetch(await endpoint('/ai/chat/send/stream'), {
@@ -120,6 +147,7 @@ export async function streamChatMessage({
       thinking,
       temperature,
       is_network: isNetwork,
+      attachments,
     }),
     signal,
   });
@@ -150,6 +178,7 @@ export async function streamChatMessage({
       if (payload.error) throw new Error(payload.error);
       if (payload.type === 'thinking') onThinking?.(normalizeStreamContent(payload.content));
       if (payload.type === 'text') onText?.(normalizeStreamContent(payload.content));
+      if (payload.type === 'file') onFile?.(payload.content);
     }
     return false;
   };

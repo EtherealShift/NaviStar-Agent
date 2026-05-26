@@ -1,11 +1,31 @@
-import { BrainCircuit, Eraser, Gauge, Globe2, Network, SendHorizontal, Square, Zap } from 'lucide-react';
+import {
+  BrainCircuit,
+  Eraser,
+  Gauge,
+  Globe2,
+  Network,
+  Paperclip,
+  SendHorizontal,
+  Square,
+  X,
+  Zap,
+} from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import ModelPicker from './ModelPicker.jsx';
+
+function formatFileSize(size) {
+  if (!size || Number.isNaN(size)) return '';
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
 
 export default function ChatInput({
   value,
   disabled,
   sending,
+  uploading,
+  attachments = [],
   mode,
   networkEnabled,
   temperature,
@@ -15,13 +35,16 @@ export default function ChatInput({
   onClear,
   onSubmit,
   onStop,
+  onUploadFiles,
+  onRemoveFile,
   onModeChange,
   onNetworkChange,
   onTemperatureChange,
   onModelChange,
 }) {
   const inputRef = useRef(null);
-  const canSend = value.trim().length > 0 && !sending && !disabled;
+  const fileInputRef = useRef(null);
+  const canSend = (value.trim().length > 0 || attachments.length > 0) && !sending && !disabled && !uploading;
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -48,19 +71,62 @@ export default function ChatInput({
           <label htmlFor="chat-input" className="sr-only">
             输入消息
           </label>
+          {attachments.length > 0 && (
+            <div className="input-attachments" aria-label="已选择附件">
+              {attachments.map((file) => (
+                <div className="input-attachment" key={file.fileId}>
+                  <Paperclip className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                  {file.size ? <span className="shrink-0 text-zinc-500">{formatFileSize(file.size)}</span> : null}
+                  <button
+                    type="button"
+                    className="input-attachment__remove"
+                    title="移除附件"
+                    aria-label={`移除附件 ${file.name}`}
+                    onClick={() => onRemoveFile(file.fileId)}
+                    disabled={sending}
+                  >
+                    <X className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <textarea
             id="chat-input"
             ref={inputRef}
             rows={1}
             value={value}
-            disabled={disabled}
+            disabled={disabled || uploading}
             onChange={(event) => onChange(event.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="输入消息，Enter 发送，Shift + Enter 换行"
+            placeholder={uploading ? '附件上传中...' : '输入消息，Enter 发送，Shift + Enter 换行'}
             className="max-h-36 min-h-14 w-full resize-none overflow-y-auto bg-transparent px-2 py-2 text-sm leading-6 text-zinc-100 outline-none placeholder:text-zinc-600 disabled:cursor-not-allowed disabled:opacity-60"
           />
           <div className="flex items-center justify-between gap-3 pt-2">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 pr-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                tabIndex={-1}
+                onChange={(event) => {
+                  onUploadFiles?.(event.target.files);
+                  event.target.value = '';
+                }}
+              />
+              <button
+                type="button"
+                title={uploading ? '正在上传' : '添加附件'}
+                aria-label={uploading ? '正在上传' : '添加附件'}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={sending || uploading || disabled}
+                className={`desktop-icon-button desktop-icon-button--framed ${attachments.length ? 'desktop-toggle--active' : ''}`}
+              >
+                <Paperclip className="h-4 w-4" aria-hidden="true" />
+              </button>
+
               <div className="flex rounded-xl border border-white/10 bg-black/20 p-1">
                 <button
                   type="button"
@@ -121,7 +187,7 @@ export default function ChatInput({
               <button
                 type="button"
                 onClick={onClear}
-                disabled={!value || sending}
+                disabled={(!value && !attachments.length) || sending}
                 title="清空输入"
                 aria-label="清空输入"
                 className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"

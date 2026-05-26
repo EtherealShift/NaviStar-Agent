@@ -1,8 +1,9 @@
-import { Brain, Check, Copy, UserCircle } from 'lucide-react';
+import { Brain, Check, Copy, Download, FileText, Table2, UserCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { resolveApiUrl } from '../api/chatApi.js';
 import LoadingDots from './LoadingDots.jsx';
 
 function AssistantAvatar() {
@@ -56,6 +57,70 @@ function CodeBlock({ inline, className, children, node: _node, ...props }) {
           {children}
         </code>
       </pre>
+    </div>
+  );
+}
+
+function formatFileSize(size) {
+  if (!size || Number.isNaN(size)) return '';
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function GeneratedFileItem({ file }) {
+  const [href, setHref] = useState('');
+
+  useEffect(() => {
+    let mounted = true;
+    resolveApiUrl(file.downloadUrl).then((url) => {
+      if (mounted) setHref(url);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [file.downloadUrl]);
+
+  return (
+    <div className="generated-file">
+      <div className="generated-file__icon">
+        {file.extension?.toLowerCase().includes('xls') ? (
+          <Table2 className="h-4 w-4" aria-hidden="true" />
+        ) : (
+          <FileText className="h-4 w-4" aria-hidden="true" />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium text-zinc-100">{file.name}</div>
+        <div className="mt-0.5 text-xs text-zinc-500">
+          {file.extension?.toUpperCase().replace('.', '') || 'FILE'}
+          {file.size ? ` · ${formatFileSize(file.size)}` : ''}
+        </div>
+      </div>
+      <a
+        href={href || '#'}
+        download={file.name}
+        className="generated-file__download"
+        title="下载文件"
+        aria-label={`下载 ${file.name}`}
+        onClick={(event) => {
+          if (!href) event.preventDefault();
+        }}
+      >
+        <Download className="h-4 w-4" aria-hidden="true" />
+      </a>
+    </div>
+  );
+}
+
+function GeneratedFiles({ files = [] }) {
+  if (!files.length) return null;
+
+  return (
+    <div className="mt-3 flex w-full flex-col gap-2">
+      {files.map((file) => (
+        <GeneratedFileItem key={file.fileId} file={file} />
+      ))}
     </div>
   );
 }
@@ -118,6 +183,8 @@ export default function MessageBubble({ message }) {
               </ReactMarkdown>
             </div>
           )}
+          {!isUser && <GeneratedFiles files={message.files || []} />}
+          {isUser && <GeneratedFiles files={message.attachments || message.files || []} />}
         </div>
         <div className={`mt-1 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 ${isUser ? 'justify-end' : 'justify-start'}`}>
           <button

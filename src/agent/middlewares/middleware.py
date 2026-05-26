@@ -7,7 +7,7 @@ Agent 中间件配置
   防止上下文窗口被长对话撑爆。
 
 当前中间件：
-  - SummarizationMiddleware → 对话超过 3000 token 时自动摘要，保留最近 20 条
+  - SummarizationMiddleware → 对话超过 100000 token 时自动摘要，保留最近 20 条
 """
 
 
@@ -27,7 +27,7 @@ def install_builtin_middlewares():
     require_deepseek_api_key()
     summarizer = SummarizationMiddleware(
         model=ChatDeepSeek(model=DEFAULT_MODEL_NAME, temperature=0.7),
-        max_tokens_before_summary=3000,
+        max_tokens_before_summary=100000,
         messages_to_keep=20,
     )
     logger.info("中间件就绪：SummarizationMiddleware")

@@ -21,11 +21,19 @@ class MessagesModel:
 
     role: str
     content: str
+    meta_data: dict
 
     def __init__(self, msg=None):
+        self.meta_data = {}
         if isinstance(msg, HumanMessage):
             self.role = "Human"
-            self.content = msg.content if isinstance(msg.content, str) else str(msg.content)
+            display_content = msg.additional_kwargs.get("display_content")
+            self.content = display_content if isinstance(display_content, str) else (
+                msg.content if isinstance(msg.content, str) else str(msg.content)
+            )
+            attachments = msg.additional_kwargs.get("attachments")
+            if attachments:
+                self.meta_data["files"] = attachments
         elif isinstance(msg, ToolMessage):
             self.role = "Tool"
             self.content = msg.content if isinstance(msg.content, str) else str(msg.content)

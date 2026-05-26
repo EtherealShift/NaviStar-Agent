@@ -281,6 +281,52 @@ summary {
   white-space: nowrap;
 }
 
+.input-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0 0.35rem 0.5rem;
+}
+
+.input-attachment {
+  display: inline-flex;
+  max-width: min(22rem, 100%);
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid rgba(45, 212, 191, 0.22);
+  border-radius: 0.7rem;
+  background: rgba(20, 184, 166, 0.1);
+  color: #d4d4d8;
+  padding: 0.25rem 0.3rem 0.25rem 0.55rem;
+  font-size: 0.78rem;
+}
+
+.input-attachment__remove {
+  display: inline-flex;
+  height: 1.45rem;
+  width: 1.45rem;
+  flex-shrink: 0;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: #a1a1aa;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.input-attachment__remove:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.input-attachment__remove:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .settings-field {
   display: flex;
   flex-direction: column;
@@ -501,6 +547,51 @@ summary {
 .code-frame__copy:hover {
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
+}
+
+.generated-file {
+  display: flex;
+  min-width: 14rem;
+  max-width: 26rem;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid rgba(45, 212, 191, 0.18);
+  border-radius: 0.75rem;
+  background: rgba(20, 184, 166, 0.08);
+  padding: 0.65rem;
+}
+
+.generated-file__icon {
+  display: flex;
+  height: 2rem;
+  width: 2rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.6rem;
+  background: rgba(20, 184, 166, 0.16);
+  color: #99f6e4;
+}
+
+.generated-file__download {
+  display: flex;
+  height: 2rem;
+  width: 2rem;
+  flex-shrink: 0;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.6rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: #d4d4d8;
+  text-decoration: none;
+  transition: background 180ms ease, color 180ms ease;
+}
+
+.generated-file__download:hover {
+  background: rgba(45, 212, 191, 0.18);
+  color: #ccfbf1;
 }
 
 .markdown-body pre code {

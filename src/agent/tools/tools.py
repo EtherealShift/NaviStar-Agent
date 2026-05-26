@@ -16,6 +16,7 @@ from langchain_core.tools import tool, BaseTool
 from langchain_tavily import TavilySearch
 from loguru import logger
 
+from agent.tools.excel_agent_tool import excel_agent
 from app.tools.captured_tools import douyin_fetch_video_detail, douyin_fetch_video_list
 from common.config.settings_config import load_runtime_settings
 from common.config.constants import ENV_TAVILY_API_KEY
@@ -83,6 +84,7 @@ async def install_tools() -> list[BaseTool]:
         get_location_by_ip,
         douyin_fetch_video_detail,
         douyin_fetch_video_list,
+        excel_agent,
         web_search_text,
     ]
 

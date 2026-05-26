@@ -1,14 +1,14 @@
 from langchain.agents import create_agent
 from langchain_deepseek import ChatDeepSeek
 
+from common.config.constants import MODEL_LIST
 from common.config.settings_config import require_deepseek_api_key
-from common.models.common_model import AgentModel, MODEL_LIST
+from common.models.common_model import AgentModel
 
 def create_agent_with(agent: AgentModel):
     provider = None
 
     # 选择服务商
-
     for candidate_provider, model_name in MODEL_LIST.items():
         if agent.model_name in model_name:
             provider = candidate_provider
@@ -16,12 +16,14 @@ def create_agent_with(agent: AgentModel):
 
     if provider == "DEEPSEEK":
         require_deepseek_api_key()
-        llm = ChatDeepSeek(
-            model=agent.model_name,
-            thinking=agent.thinking,
-            streaming=True,
-            temperature=agent.temperature,
-        )
+        llm_kwargs = {
+            "model": agent.model_name,
+            "thinking": agent.thinking,
+            "streaming": True,
+            "temperature": agent.temperature,
+            "reasoning_effort": "xhigh"
+        }
+        llm = ChatDeepSeek(**llm_kwargs)
     else:
         raise ValueError(f"暂不支持的模型：{agent.model_name}")
 
@@ -32,6 +34,5 @@ def create_agent_with(agent: AgentModel):
         middleware=agent.middleware,
         checkpointer=agent.checkpointer,
     )
-
 
 

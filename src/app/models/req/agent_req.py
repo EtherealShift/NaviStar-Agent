@@ -4,10 +4,14 @@ from common.config.constants import DEFAULT_MODEL_NAME
 
 
 class Attachment(BaseModel):
-    filename: str
-    content_type: str
-    access_url: str
-    size: int
+    file_id: str = ""
+    name: str = ""
+    filename: str = ""
+    content_type: str = ""
+    download_url: str = ""
+    access_url: str = ""
+    extension: str = ""
+    size: int = 0
 
 
 class AgentReq(BaseModel):

@@ -26,6 +26,51 @@ export function normalizeRole(role) {
   return 'assistant';
 }
 
+export function normalizeFile(file) {
+  if (!file || typeof file !== 'object') return null;
+  const fileId = file.file_id || file.fileId || file.id;
+  const name = file.name || file.filename || '生成文件';
+  const downloadUrl = file.download_url || file.downloadUrl || file.url;
+  if (!fileId || !downloadUrl) return null;
+  return {
+    fileId,
+    name,
+    downloadUrl,
+    size: Number(file.size || 0),
+    contentType: file.content_type || file.contentType || '',
+    extension: file.extension || '',
+    createdAt: file.created_at || file.createdAt || '',
+  };
+}
+
+export function toAttachmentPayload(file) {
+  const normalized = normalizeFile(file);
+  if (!normalized) return null;
+  return {
+    file_id: normalized.fileId,
+    name: normalized.name,
+    filename: normalized.name,
+    content_type: normalized.contentType,
+    download_url: normalized.downloadUrl,
+    access_url: normalized.downloadUrl,
+    extension: normalized.extension,
+    size: normalized.size,
+  };
+}
+
+export function mergeFiles(existing = [], incoming = []) {
+  const files = new Map();
+  existing.map(normalizeFile).filter(Boolean).forEach((file) => files.set(file.fileId, file));
+  incoming.map(normalizeFile).filter(Boolean).forEach((file) => files.set(file.fileId, file));
+  return [...files.values()];
+}
+
+export function normalizeFiles(metaData = {}) {
+  const rawFiles = Array.isArray(metaData.files) ? metaData.files : [];
+  const singleFile = metaData.file ? [metaData.file] : [];
+  return mergeFiles([], [...rawFiles, ...singleFile]);
+}
+
 export function normalizeMessages(messages = []) {
   const assistantByGroup = new Map();
   const orderedMessages = [];
@@ -53,6 +98,7 @@ export function normalizeMessages(messages = []) {
           msgOrder: item.msg_order,
           createdAt: item.created_at,
           metaData: item.meta_data || {},
+          files: normalizeFiles(item.meta_data || {}),
         });
         return;
       }
@@ -68,6 +114,7 @@ export function normalizeMessages(messages = []) {
           sourceRole: 'AI',
           content: '',
           thinking: '',
+          files: [],
           msgOrder: item.msg_order,
           createdAt: item.created_at,
           metaData: {},
@@ -86,6 +133,7 @@ export function normalizeMessages(messages = []) {
         ...assistantMessage.metaData,
         ...(item.meta_data || {}),
       };
+      assistantMessage.files = mergeFiles(assistantMessage.files, normalizeFiles(item.meta_data || {}));
     });
 
   return orderedMessages;

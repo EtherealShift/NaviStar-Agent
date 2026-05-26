@@ -8,6 +8,7 @@ import {
   fetchSettings,
   saveSettings,
   streamChatMessage,
+  uploadFiles,
 } from './api/chatApi.js';
 import ChatHeader from './components/ChatHeader.jsx';
 import ChatInput from './components/ChatInput.jsx';
@@ -16,8 +17,11 @@ import SettingsPanel from './components/SettingsPanel.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import {
   createEmptyConversation,
+  mergeFiles,
   messageId,
+  normalizeFile,
   normalizeMessages,
+  toAttachmentPayload,
 } from './utils/chat.js';
 
 export default function App() {
@@ -26,6 +30,7 @@ export default function App() {
   const [activeThreadId, setActiveThreadId] = useState('');
   const [messagesByThread, setMessagesByThread] = useState({});
   const [input, setInput] = useState('');
+  const [attachments, setAttachments] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [responseMode, setResponseMode] = useState('fast');
   const [networkEnabled, setNetworkEnabled] = useState(false);
@@ -39,6 +44,7 @@ export default function App() {
   const [loadingSettings, setLoadingSettings] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const abortControllerRef = useRef(null);
 
@@ -162,6 +168,7 @@ export default function App() {
     setMessagesByThread((prev) => ({ ...prev, [conversation.thread_id]: [] }));
     setActiveThreadId(conversation.thread_id);
     setInput('');
+    setAttachments([]);
     setError('');
   };
 
@@ -199,6 +206,7 @@ export default function App() {
   const selectConversation = (threadId) => {
     setActiveThreadId(threadId);
     setInput('');
+    setAttachments([]);
     setError('');
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
       setSidebarCollapsed(true);
@@ -214,13 +222,16 @@ export default function App() {
 
   const sendMessage = async () => {
     const trimmed = input.trim();
-    if (!trimmed || sending || !activeThreadId) return;
+    if ((!trimmed && !attachments.length) || sending || uploading || !activeThreadId) return;
 
     const threadId = activeThreadId;
+    const messageAttachments = attachments;
+    const attachmentPayload = messageAttachments.map(toAttachmentPayload).filter(Boolean);
     const userMessage = {
       id: messageId('user'),
       role: 'user',
-      content: trimmed,
+      content: trimmed || '请处理这些附件。',
+      attachments: messageAttachments,
       createdAt: new Date().toISOString(),
     };
     const assistantMessage = {
@@ -228,11 +239,13 @@ export default function App() {
       role: 'assistant',
       content: '',
       thinking: '',
+      files: [],
       status: 'loading',
       createdAt: new Date().toISOString(),
     };
 
     setInput('');
+    setAttachments([]);
     setError('');
     setSending(true);
     const controller = new AbortController();
@@ -247,6 +260,7 @@ export default function App() {
         thinking: responseMode === 'deep',
         isNetwork: networkEnabled,
         temperature,
+        attachments: attachmentPayload,
         onText: (chunk) => {
           updateMessages(threadId, (prev) =>
             prev.map((item) =>
@@ -262,6 +276,21 @@ export default function App() {
             prev.map((item) =>
               item.id === assistantMessage.id
                 ? { ...item, thinking: `${item.thinking || ''}${chunk}`, status: 'streaming' }
+                : item,
+            ),
+          );
+        },
+        onFile: (file) => {
+          const normalizedFile = normalizeFile(file);
+          if (!normalizedFile) return;
+          updateMessages(threadId, (prev) =>
+            prev.map((item) =>
+              item.id === assistantMessage.id
+                ? {
+                    ...item,
+                    files: mergeFiles(item.files || [], [normalizedFile]),
+                    status: 'streaming',
+                  }
                 : item,
             ),
           );
@@ -307,6 +336,32 @@ export default function App() {
 
   const stopGeneration = () => {
     abortControllerRef.current?.abort();
+  };
+
+  const addAttachments = async (files) => {
+    const selectedFiles = Array.from(files || []).filter(Boolean);
+    if (!selectedFiles.length) return;
+
+    setUploading(true);
+    setError('');
+    try {
+      const uploaded = await uploadFiles(selectedFiles);
+      const normalizedFiles = uploaded.map(normalizeFile).filter(Boolean);
+      setAttachments((prev) => mergeFiles(prev, normalizedFiles));
+    } catch (err) {
+      setError(err.message || '文件上传失败');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeAttachment = (fileId) => {
+    setAttachments((prev) => prev.filter((file) => file.fileId !== fileId));
+  };
+
+  const clearInput = () => {
+    setInput('');
+    setAttachments([]);
   };
 
   const loadSettings = async () => {
@@ -396,15 +451,19 @@ export default function App() {
           value={input}
           disabled={!activeThreadId || loadingMessages}
           sending={sending}
+          uploading={uploading}
+          attachments={attachments}
           mode={responseMode}
           networkEnabled={networkEnabled}
           temperature={temperature}
           modelName={modelName}
           modelGroups={modelGroups}
           onChange={setInput}
-          onClear={() => setInput('')}
+          onClear={clearInput}
           onSubmit={sendMessage}
           onStop={stopGeneration}
+          onUploadFiles={addAttachments}
+          onRemoveFile={removeAttachment}
           onModeChange={setResponseMode}
           onNetworkChange={setNetworkEnabled}
           onTemperatureChange={setTemperature}

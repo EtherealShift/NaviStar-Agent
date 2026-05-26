@@ -14,10 +14,11 @@ dependencies = [
     "sqlalchemy==2.0.50",
     "uapi-sdk-python==0.1.17",
     "pyinstaller==6.20.0",
+    "python-multipart==0.0.29",
     "langchain-mcp-adapters==0.2.2",
     "chromadb==1.5.9",
-    "asyncddgs==0.1.0a1",
     "ddgs==9.14.4",
+    "openpyxl==3.1.5",
 ]
 
 

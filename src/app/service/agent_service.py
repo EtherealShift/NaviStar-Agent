@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from pathlib import Path
 
 from langchain_core.messages import HumanMessage
 
@@ -14,6 +15,7 @@ from app.models.req.agent_req import AgentReq
 from loguru import logger
 
 from app.models.resp.query_resp import ConversationList
+from app.service.generated_file_service import extract_generated_files, get_registered_file
 from app.tools.mcp_tools import mcp_build_tools
 from common.config.constants import DEFAULT_MODEL_NAME, MODEL_LIST
 from common.config.settings_config import require_deepseek_api_key
@@ -24,6 +26,49 @@ from common.models.result import Result
 
 async def get_checkpointer_dep():
     return await get_checkpoint()
+
+
+def _stream_payload(payload: dict) -> str:
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _build_attachment_prompt(req: AgentReq) -> str:
+    if not req.attachments:
+        return req.human_message
+
+    display_message = req.human_message.strip() or "请处理这些附件。"
+    lines = [
+        display_message,
+        "",
+        "用户已上传以下附件，可按需读取和分析：",
+    ]
+    for index, attachment in enumerate(req.attachments, start=1):
+        file_info = get_registered_file(attachment.file_id)
+        file_path = file_info.get("path") if file_info else ""
+        name = attachment.name or attachment.filename or (file_info or {}).get("name") or "未命名文件"
+        content_type = attachment.content_type or (file_info or {}).get("content_type") or "application/octet-stream"
+        size = attachment.size or int((file_info or {}).get("size") or 0)
+        extension = attachment.extension or Path(name).suffix
+
+        lines.append(
+            f"{index}. {name} | 类型: {content_type} | 大小: {size} bytes"
+            f" | 扩展名: {extension or '未知'} | file_id: {attachment.file_id}"
+        )
+        if file_path:
+            lines.append(f"   本地路径: {file_path}")
+
+    lines.append("如需处理 Excel，请优先调用 excel_agent，并把上述本地路径一并交给它。")
+    return "\n".join(lines)
+
+
+def _build_human_message(req: AgentReq) -> HumanMessage:
+    content = _build_attachment_prompt(req)
+    additional_kwargs = {"display_content": req.human_message.strip() or "请处理这些附件。"}
+    if req.attachments:
+        additional_kwargs["attachments"] = [
+            attachment.model_dump(exclude_none=True) for attachment in req.attachments
+        ]
+    return HumanMessage(content=content, additional_kwargs=additional_kwargs)
 
 
 async def chat_stream(req: AgentReq):
@@ -71,23 +116,23 @@ async def chat_stream(req: AgentReq):
                 )
             )
 
-            state = {"messages": [HumanMessage(content=req.human_message)]}
-            config = {"configurable": {"thread_id": req.thread_id}}
+            state = {"messages": [_build_human_message(req)]}
+            config = {"configurable": {"thread_id": req.thread_id}, "recursion_limit": 100}
+            streamed_file_ids = set()
 
             async for event in agent.astream_events(state, config, version="v2"):
+                for file_info in extract_generated_files(event.get("data")):
+                    file_id = file_info.get("file_id")
+                    if file_id in streamed_file_ids:
+                        continue
+                    streamed_file_ids.add(file_id)
+                    yield _stream_payload({"type": "file", "content": file_info})
+
                 chunk = event.get("data", {}).get("chunk")
                 if chunk and hasattr(chunk, "content") and chunk.content:
-                    payload = json.dumps(
-                        {"type": "text", "content": chunk.content},
-                        ensure_ascii=False,
-                    )
-                    yield f"data: {payload}\n\n"
+                    yield _stream_payload({"type": "text", "content": chunk.content})
                 if chunk and hasattr(chunk, "additional_kwargs") and chunk.additional_kwargs:
-                    payload = json.dumps(
-                        {"type": "thinking", "content": chunk.additional_kwargs},
-                        ensure_ascii=False,
-                    )
-                    yield f"data: {payload}\n\n"
+                    yield _stream_payload({"type": "thinking", "content": chunk.additional_kwargs})
             yield "data: [DONE]\n\n"
         except Exception as e:
             ex_msg = str(e)

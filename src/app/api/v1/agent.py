@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, File, UploadFile
 from starlette.responses import StreamingResponse
 from loguru import logger
 
@@ -7,6 +7,7 @@ from app.models.req.query_req import QueryReq
 from app.models.req.settings_req import SettingsReq
 from app.models.resp.query_resp import ConversationList, QueryResp
 from app.service.agent_service import chat_stream, chat_delete, chat_query, chat_conversation_list, chat_model_list
+from app.service.generated_file_service import build_file_response, save_uploaded_files
 from app.service.settings_service import get_settings, update_settings
 from common.models.result import Result
 
@@ -53,6 +54,21 @@ async def get_chat_model_list() -> Result:
     返回模型列表
     """
     return await chat_model_list()
+
+
+@agentRouter.get("/files/{file_id}/download")
+async def download_generated_file(file_id: str):
+    return build_file_response(file_id)
+
+
+@agentRouter.post("/files/upload")
+async def upload_files(files: list[UploadFile] = File(...)) -> Result:
+    if not files:
+        return Result(msg="请选择要上传的文件").failure()
+
+    uploaded_files = await save_uploaded_files(files)
+    logger.info("[files/upload] saved {} files", len(uploaded_files))
+    return Result(data={"files": uploaded_files}, msg="文件上传成功").success()
 
 
 @agentRouter.get("/settings")

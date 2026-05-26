@@ -6,6 +6,7 @@ from loguru import logger
 
 from app.database.conversatuon_db import save_conversation
 from app.models.messages_model import MessagesModel, MessagesConversation
+from app.service.generated_file_service import extract_generated_files
 
 
 def _build_conversation_title(content: str) -> str:
@@ -42,6 +43,7 @@ async def _save_conversation(state: AgentState, runtime: Runtime):
     conversation_title = _build_conversation_title(human_content)
 
     records: list[MessagesModel] = []
+    generated_files = []
 
     for msg in recent_messages:
 
@@ -68,17 +70,25 @@ async def _save_conversation(state: AgentState, runtime: Runtime):
 
         # 工具消息
         elif isinstance(msg, ToolMessage):
+            generated_files.extend(extract_generated_files(msg))
             records.append(MessagesModel(msg))
 
     messages_conversation: list[MessagesConversation] = []
 
     for record in records:
+        meta_data = {}
+        if record.role == "Human":
+            meta_data.update(getattr(record, "meta_data", {}) or {})
+        if record.role == "AI" and generated_files:
+            meta_data["files"] = generated_files
+
         messages_conversation.append(
             MessagesConversation(
                 role=record.role,
                 content=record.content,
                 thread_id=thread_id,
                 title=conversation_title,
+                meta_data=meta_data,
             )
         )
 
