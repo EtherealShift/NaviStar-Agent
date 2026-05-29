@@ -2,7 +2,6 @@
 """
 Agent 中间件配置
 
-为什么需要这个模块？
   中间件在 Agent 处理消息的前后插入额外逻辑（如自动摘要），
   防止上下文窗口被长对话撑爆。
 
@@ -11,22 +10,18 @@ Agent 中间件配置
 """
 
 
+
+from langchain.agents.middleware import SummarizationMiddleware
 from loguru import logger
-from langchain.agents.middleware import SummarizationMiddleware, after_agent
-from langchain_deepseek import ChatDeepSeek
-
-from common.config.constants import DEFAULT_MODEL_NAME
-from common.config.settings_config import require_deepseek_api_key
 
 
-def install_builtin_middlewares():
+def install_summarization_middleware(llm):
     """
     官方内置中间件：自动摘要对话上下文
     使用独立的 summarization 模型，并设置触发/保留策略。
     """
-    require_deepseek_api_key()
     summarizer = SummarizationMiddleware(
-        model=ChatDeepSeek(model=DEFAULT_MODEL_NAME, temperature=0.7),
+        model=llm,
         max_tokens_before_summary=100000,
         messages_to_keep=20,
     )
@@ -34,10 +29,10 @@ def install_builtin_middlewares():
     return [summarizer]
 
 
-def install_middlewares() -> list:
-    """安装所有中间件，返回列表供 Agent 使用。"""
-    logger.info("[中间件] 开始安装默认中间件栈")
-    middlewares = []
-    middlewares.extend(install_builtin_middlewares())
-    logger.info("[中间件] 官方内置中间件添加完成")
-    return middlewares
+# def install_middlewares() -> list:
+#     """安装所有中间件，返回列表供 Agent 使用。"""
+#     logger.info("[中间件] 开始安装默认中间件栈")
+#     middlewares = []
+#     middlewares.extend(install_builtin_middlewares())
+#     logger.info("[中间件] 官方内置中间件添加完成")
+#     return middlewares

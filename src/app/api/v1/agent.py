@@ -1,14 +1,29 @@
+"""
+Agent Chat API 路由。
+
+定义所有面向前端的 REST 接口：
+  - /chat/send/stream  — 流式对话（SSE）
+  - /chat/query        — 查询历史消息
+  - /chat/del          — 删除对话
+  - /chat/query_list   — 会话列表
+  - /chat/model_list   — 可用模型列表
+  - /skills            — 技能目录
+  - /mcp/status        — MCP 服务状态
+  - /files/{id}/download — 文件下载
+  - /files/upload      — 文件上传
+  - /settings          — 设置读写
+"""
+
 from fastapi import APIRouter, File, UploadFile
-from starlette.responses import StreamingResponse
 from loguru import logger
+from starlette.responses import StreamingResponse
 
 from app.models.req.agent_req import AgentReq
 from app.models.req.query_req import QueryReq
 from app.models.req.settings_req import SettingsReq
 from app.models.resp.query_resp import ConversationList, QueryResp
 from app.service.agent_service import chat_stream, chat_delete, chat_query, chat_conversation_list, chat_model_list
-from app.service.generated_file_service import build_file_response, save_uploaded_files
-from app.service.settings_service import get_settings, update_settings
+# from app.service.settings_service import get_settings, update_settings
 from common.models.result import Result
 
 agentRouter = APIRouter()
@@ -56,26 +71,34 @@ async def get_chat_model_list() -> Result:
     return await chat_model_list()
 
 
-@agentRouter.get("/files/{file_id}/download")
-async def download_generated_file(file_id: str):
-    return build_file_response(file_id)
+# @agentRouter.get("/skills")
+# async def get_skills(include_mcp: bool = True) -> Result:
+#     return await get_skill_catalog(include_mcp=include_mcp)
 
 
-@agentRouter.post("/files/upload")
-async def upload_files(files: list[UploadFile] = File(...)) -> Result:
-    if not files:
-        return Result(msg="请选择要上传的文件").failure()
-
-    uploaded_files = await save_uploaded_files(files)
-    logger.info("[files/upload] saved {} files", len(uploaded_files))
-    return Result(data={"files": uploaded_files}, msg="文件上传成功").success()
+# @agentRouter.get("/mcp/status")
+# async def get_mcp_client_status() -> Result:
+#     return await get_mcp_status()
 
 
-@agentRouter.get("/settings")
-async def get_app_settings() -> Result:
-    return await get_settings()
+# @agentRouter.get("/files/{file_id}/download")
+# async def download_generated_file(file_id: str):
+#     return build_file_response(file_id)
 
 
-@agentRouter.post("/settings")
-async def update_app_settings(req: SettingsReq) -> Result:
-    return await update_settings(req)
+# @agentRouter.post("/files/upload")
+# async def upload_files(files: list[UploadFile] = File(...)) -> Result:
+#     if not files:
+#         return Result(msg="请选择要上传的文件").failure()
+#
+#     uploaded_files = await save_uploaded_files(files)
+#     logger.info("[files/upload] saved {} files", len(uploaded_files))
+#     return Result(data={"files": uploaded_files}, msg="文件上传成功").success()
+
+
+
+#
+#
+# @agentRouter.post("/settings")
+# async def update_app_settings(req: SettingsReq) -> Result:
+#     return await update_settings(req)

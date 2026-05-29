@@ -1,15 +1,14 @@
 from contextlib import asynccontextmanager
+
 from loguru import logger
+
+from common.config.constants import DEFAULT_DB_FILENAME, DB_PATH
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-
-from common.config.app_settings import get_app_settings
 
 # 确保所有实体模型被导入，以便 Base.metadata 包含所有表定义
 from app.models.enty.conversation_messages import Conversation, MessagesGroup, MessageContent  # noqa: F401
 from app.models.enty.base import Base
-
-_DB_PATH = get_app_settings().database_path
 
 _engine = None
 _SessionFactory = None
@@ -20,7 +19,7 @@ def _get_engine():
     global _engine
     if _engine is None:
         _engine = create_async_engine(
-            url=f"sqlite+aiosqlite:///{_DB_PATH.as_posix()}",
+            url=f"sqlite+aiosqlite:///{DB_PATH}",
             echo=False,
         )
     return _engine

@@ -1,32 +1,61 @@
-from app.models.req.settings_req import SettingsReq
-from common.config.mcp_config import public_mcp_config, read_mcp_config, save_mcp_config
-from common.config.settings_config import public_settings, read_settings, save_settings
-from common.config.constants import ENV_DEEPSEEK_API_KEY, ENV_TAVILY_API_KEY
+"""
+设置管理服务。
+"""
+import yaml
+from dotenv import set_key
+from loguru import logger
+
+from app.models.req.settings_req import SettingsReq, ModelKeyReq
+from common.config.constants import SUPPLIER_YAML_PATH, ENV_PATH
 from common.models.result import Result
+from common.utils.file_utils import supplier_yaml_path
+
+settings = supplier_yaml_path()
+
+async def update_settings(req: SettingsReq) -> Result:
+    """
+    更新模型设置。
+    """
+
+    if req.temperature is not None:
+        settings.get("model")["temperature"] = req.temperature
+    if req.reasoning_effort is not None:
+        settings.get("model")["reasoning_effort"] = req.reasoning_effort
+    if req.supplier is not None:
+        settings.get("model")["supplier"] = req.supplier
+    if req.model_name is not None:
+        settings.get("model")["model_name"] = req.model_name
+    try:
+        with open(SUPPLIER_YAML_PATH, "w+") as f:
+            yaml.dump(settings, f, default_flow_style=False)
+    except Exception as e:
+        logger.error(e)
+        return Result(msg="配置设置失败").failure()
+
+    return Result().success()
 
 
 async def get_settings() -> Result:
-    data = public_settings(read_settings())
-    data["mcp"] = public_mcp_config(read_mcp_config())
-    return Result(data=data).success()
+    """
+    获取模型设置。
+    """
+    try:
+        with open(SUPPLIER_YAML_PATH, "r") as f:
+            settings = yaml.load(f, Loader=yaml.FullLoader)
+    except Exception as e:
+        logger.error(e)
+        return Result(msg="配置设置失败").failure()
+
+    return Result(data=settings).success()
 
 
-async def update_settings(req: SettingsReq) -> Result:
-    values = {}
-    deepseek = req.providers.get("DEEPSEEK") or req.providers.get("deepseek")
-    tavily = req.tools.get("TAVILY") or req.tools.get("tavily")
-
-    if deepseek is not None:
-        values[ENV_DEEPSEEK_API_KEY] = deepseek.api_key
-    if tavily is not None:
-        values[ENV_TAVILY_API_KEY] = tavily.api_key
-
-    settings = save_settings(values)
-    mcp_config = read_mcp_config()
-    if req.mcp:
-        next_mcp_config = req.mcp.get("config") if isinstance(req.mcp.get("config"), dict) else req.mcp
-        mcp_config = save_mcp_config(next_mcp_config)
-
-    data = public_settings(settings)
-    data["mcp"] = public_mcp_config(mcp_config)
-    return Result(data=data, msg="Settings saved.").success()
+def update_env_key(req: ModelKeyReq) -> Result:
+    """
+    更新环境密钥。
+    """
+    try:
+        set_key(ENV_PATH, req.supplier.upper() + "_API_KEY", req.api_key)
+        return Result().success()
+    except Exception as e:
+        logger.error(e)
+        return Result(msg="环境密钥更新失败").failure()

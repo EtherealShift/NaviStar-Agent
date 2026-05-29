@@ -1,27 +1,32 @@
+import asyncio
 import json
 from datetime import datetime
-from pathlib import Path
 
-from langchain_core.messages import HumanMessage
+from langchain.agents import create_agent
+from langchain_core.messages import HumanMessage, ImageContentBlock, PlainTextContentBlock
+from langchain_core.runnables import RunnableConfig
+from langchain_deepseek import ChatDeepSeek
+from langchain_openai import ChatOpenAI
+from loguru import logger
+from openai import OpenAI
 
-from agent.middlewares.middleware import install_middlewares
+from agent.memory.memory import get_checkpoint
+from agent.middlewares.middleware import install_summarization_middleware
 from agent.prompys.system_prompt import SYSTEM_PROMPT
-from agent.runner import create_agent_with
-from agent.tools.tools import install_tools, get_network_tools
 from app.database.conversatuon_db import del_message_content, query_conversation, get_query_content_list
 from app.middlewares.middleware import install_after_middlewares
 from app.models.enty.conversation_messages import Conversation
 from app.models.req.agent_req import AgentReq
-from loguru import logger
-
 from app.models.resp.query_resp import ConversationList
-from app.service.generated_file_service import extract_generated_files, get_registered_file
-from app.tools.mcp_tools import mcp_build_tools
-from common.config.constants import DEFAULT_MODEL_NAME, MODEL_LIST
-from common.config.settings_config import require_deepseek_api_key
-from common.memory.memory import get_checkpoint
-from common.models.common_model import AgentModel
+from common.config.app_settings import AppSettings
+from common.config.constants import DEEPSEEK_BASE_URL, MIMO_BASE_URL
+from common.models.file_model import MimeModel
 from common.models.result import Result
+import base64
+
+from common.utils.file_utils import supplier_yaml_path
+
+_thinking: dict[str, str] = {"type": "disabled"}
 
 
 async def get_checkpointer_dep():
@@ -32,43 +37,44 @@ def _stream_payload(payload: dict) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
-def _build_attachment_prompt(req: AgentReq) -> str:
-    if not req.attachments:
-        return req.human_message
-
-    display_message = req.human_message.strip() or "请处理这些附件。"
-    lines = [
-        display_message,
-        "",
-        "用户已上传以下附件，可按需读取和分析：",
-    ]
-    for index, attachment in enumerate(req.attachments, start=1):
-        file_info = get_registered_file(attachment.file_id)
-        file_path = file_info.get("path") if file_info else ""
-        name = attachment.name or attachment.filename or (file_info or {}).get("name") or "未命名文件"
-        content_type = attachment.content_type or (file_info or {}).get("content_type") or "application/octet-stream"
-        size = attachment.size or int((file_info or {}).get("size") or 0)
-        extension = attachment.extension or Path(name).suffix
-
-        lines.append(
-            f"{index}. {name} | 类型: {content_type} | 大小: {size} bytes"
-            f" | 扩展名: {extension or '未知'} | file_id: {attachment.file_id}"
-        )
-        if file_path:
-            lines.append(f"   本地路径: {file_path}")
-
-    lines.append("如需处理 Excel，请优先调用 excel_agent，并把上述本地路径一并交给它。")
-    return "\n".join(lines)
-
-
 def _build_human_message(req: AgentReq) -> HumanMessage:
-    content = _build_attachment_prompt(req)
-    additional_kwargs = {"display_content": req.human_message.strip() or "请处理这些附件。"}
-    if req.attachments:
-        additional_kwargs["attachments"] = [
-            attachment.model_dump(exclude_none=True) for attachment in req.attachments
-        ]
-    return HumanMessage(content=content, additional_kwargs=additional_kwargs)
+    """
+    构建用户消息
+    """
+    file_paths = req.attachments
+
+    content_blocks = []
+
+    mime_list =[]
+    for file_path in file_paths:
+        mime_list.append(MimeModel(file_path))
+
+
+    for mime in mime_list:
+        base64_image = base64.b64encode(open(mime.file_path, "rb").read()).decode('utf-8')
+        if mime.file_type == "image":
+            content_blocks.append(
+                ImageContentBlock(
+                    type="image",
+                    mime_type=mime.mime_type,
+                    base64=base64_image
+                )
+            )
+        if mime.file_path == "plaintext":
+            content_blocks.append(
+                PlainTextContentBlock(
+                    type="text-plain",
+                    mime_type=mime.mime_type,
+                    base64=base64_image
+                )
+            )
+
+    return HumanMessage(
+        content=req.human_message,
+        content_blocks=content_blocks
+    )
+
+
 
 
 async def chat_stream(req: AgentReq):
@@ -77,57 +83,65 @@ async def chat_stream(req: AgentReq):
     :param req:
     """
     async def event_generator():
+        global _thinking, llm
         try:
-            require_deepseek_api_key()
-            tools = await install_tools()
-
-            thinking: dict[str, str] = {"type": "disabled"}
-
+            # 开启思考模式
             if req.thinking:
                 logger.info("Thinking...")
-                thinking = {"type": "enabled"}
+                _thinking = {"type": "enabled"}
 
-            if req.is_network:
-                logger.info("Network tools enabled.")
-                get_network_tools(tools)
+            # 启用网络工具 已默认装载 联网模块
+            # if req.is_network:
+            #     logger.info("Network tools enabled.")
+            # logger.info("Skill report: {}", skill_report)
 
-            logger.info(f"tools: {[t.name for t in tools]}")
-            tools.extend(await mcp_build_tools())
+
             checkpointer = await get_checkpointer_dep()
-            middlewares = install_middlewares()
 
+            # 获取配置
+            settings = AppSettings()
+
+            # 获取模型配置
+            supplier_yaml = supplier_yaml_path().get("model", {})
+
+            llm_kwargs = {
+                "model": req.model_name,
+                "thinking": req.thinking,
+                "streaming": True,
+                "temperature": supplier_yaml.get("temperature", 1.0) ,
+                "reasoning_effort": supplier_yaml.get("reasoning_effort", "medium") ,
+            }
+
+            if req.supplier == "deepseek":
+                llm = ChatDeepSeek(**llm_kwargs)
+            if req.supplier == "openai":
+                llm = ChatOpenAI(**llm_kwargs)
+            if req.supplier == "xiaomi":
+                llm_kwargs["api_key"] = settings.mimo_api_key
+                llm_kwargs["base_url"] = MIMO_BASE_URL
+                llm = ChatOpenAI(**llm_kwargs)
+
+            # 安装中间件
+            middlewares = install_summarization_middleware(llm)
+            # 安装附加中间件
             install_after_middlewares(middlewares)
-            logger.info(f"tools: {[t.name for t in tools]}")
-            system_prompt = req.system_prompt or SYSTEM_PROMPT.format(
-                today=datetime.now().strftime("%Y年%m月%d日")
-            )
 
-            model_name = req.model_name or DEFAULT_MODEL_NAME
 
-            agent = create_agent_with(
-                AgentModel(
-                    model_name=model_name,
-                    system_prompt=system_prompt,
-                    tools=tools,
-                    checkpointer=checkpointer,
-                    middleware=middlewares,
-                    temperature=req.temperature,
-                    thinking=thinking
-                )
+            agent = create_agent(
+                model=llm,
+                checkpointer=checkpointer,
+                middleware=middlewares,
+                system_prompt=SYSTEM_PROMPT.format(
+                    today=datetime.now().strftime("%Y年%m月%d日")
+                ),
+                tools=[],
             )
 
             state = {"messages": [_build_human_message(req)]}
-            config = {"configurable": {"thread_id": req.thread_id}, "recursion_limit": 100}
-            streamed_file_ids = set()
+            # 状态
+            config: RunnableConfig = {"configurable": {"thread_id": req.thread_id}, "recursion_limit": 100}
 
             async for event in agent.astream_events(state, config, version="v2"):
-                for file_info in extract_generated_files(event.get("data")):
-                    file_id = file_info.get("file_id")
-                    if file_id in streamed_file_ids:
-                        continue
-                    streamed_file_ids.add(file_id)
-                    yield _stream_payload({"type": "file", "content": file_info})
-
                 chunk = event.get("data", {}).get("chunk")
                 if chunk and hasattr(chunk, "content") and chunk.content:
                     yield _stream_payload({"type": "text", "content": chunk.content})
@@ -208,6 +222,26 @@ async def chat_model_list() -> Result:
     """
     获取模型列表
     """
-    return Result(data=MODEL_LIST).success()
+    settings = AppSettings()
 
+    # 获取当前模型列表
+    model_list = []
 
+    deepseek_models = OpenAI(
+        api_key=settings.deepseek_api_key,
+        base_url=DEEPSEEK_BASE_URL,
+    ).models.list()
+
+    for model in deepseek_models:
+        model_list.append(model.id)
+
+    # 添加其他模型列表
+    model_list.append("xiaomi-v2.5-pro")
+    model_list.append("xiaomi-v2.5")
+
+    logger.info("Model list: {}", model_list)
+
+    return Result(data="").success()
+
+if __name__ == "__main__":
+    asyncio.run(chat_model_list())

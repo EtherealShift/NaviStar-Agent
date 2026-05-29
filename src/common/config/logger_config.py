@@ -1,15 +1,10 @@
 import logging
 import sys
+from pathlib import Path
 
 from loguru import logger
 
-from common.config.app_paths import LOG_DIR
-from common.config.constants import (
-    LOG_COMPRESSION,
-    LOG_FORMAT,
-    LOG_RETENTION,
-    LOG_ROTATION,
-)
+from common.config.constants import LOG_DIR, LOG_FORMAT, LOG_ROTATION, LOG_RETENTION, LOG_COMPRESSION
 
 
 class InterceptHandler(logging.Handler):
@@ -29,10 +24,36 @@ class InterceptHandler(logging.Handler):
         logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
 
+def _configure_standard_logging() -> None:
+    """统一接管标准 logging 和常见第三方库日志。"""
+    intercept_handler = InterceptHandler()
+    logging.basicConfig(handlers=[intercept_handler], level=0, force=True)
+
+    third_party_loggers = {
+        "uvicorn": logging.WARNING,
+        "uvicorn.error": logging.WARNING,
+        "uvicorn.access": logging.WARNING,
+        "sqlalchemy": logging.WARNING,
+        "fastapi": logging.WARNING,
+    }
+
+    for name, level in third_party_loggers.items():
+        log = logging.getLogger(name)
+        log.handlers = [intercept_handler]
+        log.propagate = False
+        log.setLevel(level)
+
+
+# def is_logger_configured() -> bool:
+#     """返回当前进程是否已经完成日志初始化。"""
+#     return _LOGGER_CONFIGURED
+
+
 def setup_logger(
         console_level: str = "INFO",
         file_level: str = "INFO",
         enable_file_log: bool = True,
+        force: bool = False,
 ):
     """
     配置日志系统
@@ -45,6 +66,8 @@ def setup_logger(
     Returns:
         配置好的 logger 实例
     """
+
+
     # 移除默认处理器
     logger.remove()
 
@@ -62,9 +85,12 @@ def setup_logger(
 
     # 文件输出
     if enable_file_log:
+        log_dir = Path(LOG_DIR)
+        log_dir.mkdir(parents=True, exist_ok=True)
+
         # 普通日志文件
         logger.add(
-            LOG_DIR / "app_{time:YYYY-MM-DD}.log",
+            log_dir / "app_{time:YYYY-MM-DD}.log",
             format=LOG_FORMAT,
             level=file_level,
             rotation=LOG_ROTATION,
@@ -77,7 +103,7 @@ def setup_logger(
 
         # 错误日志单独文件
         logger.add(
-            LOG_DIR / "error_{time:YYYY-MM-DD}.log",
+            log_dir / "error_{time:YYYY-MM-DD}.log",
             format=LOG_FORMAT,
             level="ERROR",
             rotation="100 MB",
@@ -89,23 +115,8 @@ def setup_logger(
             enqueue=True,
         )
 
-    # 拦截标准 logging
-    logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
-
-    # 配置第三方库日志
-    third_party_loggers = {
-        "uvicorn": logging.WARNING,
-        "uvicorn.error": logging.WARNING,
-        "uvicorn.access": logging.WARNING,
-        "sqlalchemy": logging.WARNING,
-        "fastapi": logging.WARNING,
-    }
-
-    for name, level in third_party_loggers.items():
-        log = logging.getLogger(name)
-        log.handlers = [InterceptHandler()]
-        log.propagate = False
-        log.setLevel(level)
+    _configure_standard_logging()
+    # _LOGGER_CONFIGURED = True
 
     logger.info("日志系统初始化完成 | 日志目录: {}", LOG_DIR)
     return logger

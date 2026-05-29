@@ -1,11 +1,31 @@
-from enum import StrEnum
+
+import os
+from pathlib import Path
 
 
-class RuntimeEnvironment(StrEnum):
-    DEVELOPMENT = "development"
-    PRODUCTION = "production"
+def _root_path() -> Path:
+    src_root = Path(__file__).resolve()
+    while src_root.name != "src":
+        src_root = src_root.parent
+    return src_root
 
 
+
+
+# ------------------------ Paths ------------------------
+SRC_ROOT = _root_path()
+RESOURCES = os.path.join(SRC_ROOT, "resources")
+ENV_PATH = os.path.join(RESOURCES, ".env")
+CONFIG_JSON = os.path.join(RESOURCES, "config.json")
+SUPPLIER_YAML_PATH = os.path.join(RESOURCES, "supplier.yaml")
+LOG_DIR = os.path.join(RESOURCES, "log")
+
+# ------------------------ Database ------------------------
+DEFAULT_DB_FILENAME = "navistar.db"
+DB_PATH = os.path.join(RESOURCES, "db", DEFAULT_DB_FILENAME)
+
+
+# ------------------------ App ------------------------
 APP_NAME = "NaviStar"
 API_TITLE = "Agent Chat API"
 API_DESCRIPTION = "小星智能对话服务"
@@ -14,30 +34,22 @@ API_VERSION = "1.0.0"
 DEFAULT_BACKEND_HOST = "127.0.0.1"
 DEFAULT_BACKEND_PORT = 8000
 
-DEFAULT_MODEL_NAME = "deepseek-v4-flash"
-MODEL_LIST = {
-    "DEEPSEEK": [
-        "deepseek-v4-pro",
-        DEFAULT_MODEL_NAME,
-    ]
-}
 
-DEFAULT_DB_FILENAME = "navistar.db"
-DEFAULT_ENV_FILENAME = ".env"
-DEFAULT_MCP_TOOLS_FILENAME = "mcp_tools.json"
-RESOURCES_DIR_NAME = "resources"
 
-ENV_APP_ENV = "NAVISTAR_ENV"
-ENV_PRODUCTION = "NAVISTAR_PRODUCTION"
-ENV_PARENT_PID = "NAVISTAR_PARENT_PID"
-ENV_BACKEND_HOST = "NAVISTAR_BACKEND_HOST"
-ENV_BACKEND_PORT = "NAVISTAR_BACKEND_PORT"
-ENV_DEEPSEEK_API_KEY = "DEEPSEEK_API_KEY"
-ENV_TAVILY_API_KEY = "TAVILY_API_KEY"
-ENV_ONE_API_KEY = "ONE_API_KEY"
-ENV_ONE_API_URL = "ONE_API_URL"
-
+# ------------------------ url ------------------------
 DEFAULT_ONE_API_URL = "https://api.getoneapi.com"
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+MIMO_BASE_URL = "https://api.xiaomi.com"
+
+
+
+
+
+
+
+
+
+
 
 LOG_FORMAT = (
     "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
@@ -45,6 +57,9 @@ LOG_FORMAT = (
     "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | "
     "<level>{message}</level>"
 )
+
 LOG_ROTATION = "10 MB"
 LOG_RETENTION = "30 days"
 LOG_COMPRESSION = "zip"
+
+

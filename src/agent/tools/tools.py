@@ -1,26 +1,18 @@
-"""
-Agent 可调用的工具注册
 
-  LangGraph Agent 通过 "工具" 与外部世界交互。
-  每个用 @tool 装饰的函数就是一个 Agent 可以调用的能力，
-  install_tools() 把所有工具收集起来交给 Agent。
-"""
 import asyncio
 from typing import Any
-import os
-
 import requests
 from ddgs import DDGS
-
 from langchain_core.tools import tool, BaseTool
 from langchain_tavily import TavilySearch
 from loguru import logger
-
-from agent.tools.excel_agent_tool import excel_agent
 from app.tools.captured_tools import douyin_fetch_video_detail, douyin_fetch_video_list
-from common.config.settings_config import load_runtime_settings
-from common.config.constants import ENV_TAVILY_API_KEY
 from common.utils.tool_utils import geocode_city, get_weather_city
+
+"""
+Agent 可调用的工具注册
+"""
+
 
 
 @tool(description="用于查询城市经纬度信息")
@@ -84,15 +76,12 @@ async def install_tools() -> list[BaseTool]:
         get_location_by_ip,
         douyin_fetch_video_detail,
         douyin_fetch_video_list,
-        excel_agent,
         web_search_text,
     ]
 
 
 def get_network_tools(tools: list[BaseTool]) -> list[BaseTool]:
-    load_runtime_settings()
-    if not os.getenv(ENV_TAVILY_API_KEY):
-        raise RuntimeError("Tavily API Key 未配置，请先在设置中填写联网搜索 Key。")
+
     tools.append(
         TavilySearch(max_results=5, topic="general"),
     )
@@ -100,17 +89,4 @@ def get_network_tools(tools: list[BaseTool]) -> list[BaseTool]:
 
 
 
-# if __name__ == "__main__":
-    # if __name__ == "__main__":
-    #     async def main():
-    #         results = await asyncio.gather(
-    #             web_search_text("虹猫", max_results=20),
-    #             web_search_text("蓝兔", max_results=25),
-    #             web_search_text("黑小虎", max_results=5),
-    #         )
-    #         for r in results:
-    #             print(r)
-    #
-    #
-    #     asyncio.run(main())
 

@@ -1,27 +1,14 @@
-from langchain_mcp_adapters.client import MultiServerMCPClient
-from loguru import logger
+"""
+MCP 工具构建（薄封装）。
 
-from common.config.mcp_config import read_mcp_config
+将 MCPClientService 的 load_tools() 封装为一个便捷函数，
+供需要加载 MCP 工具的外部模块调用。
+"""
+
+# from app.service.mcp_client_service import MCPClientService
 
 
-async def mcp_build_tools():
-    mcp_tools = read_mcp_config()
-    mcp_servers = mcp_tools.get("mcpServers")
-    mcp = {}
-    if not mcp_servers:
-        return []
-
-    for mcp_server_name, mcp_server_info in mcp_servers.items():
-        mcp[mcp_server_name] = {}
-        for key, value in mcp_server_info.items():
-            if key == "type" and value == "streamable_http":
-                mcp[mcp_server_name]["transport"] = "http"
-            else:
-                mcp[mcp_server_name][key] = value
-
-    try:
-        client = MultiServerMCPClient(mcp)
-        return await client.get_tools()
-    except Exception as e:
-        logger.error("MCP 工具加载失败: {}", e)
-        return []
+# async def mcp_build_tools():
+#     """从所有已配置的 MCP 服务加载工具列表。"""
+#     tools, _ = await MCPClientService().load_tools()
+#     return tools

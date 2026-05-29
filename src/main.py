@@ -1,15 +1,28 @@
+"""
+NaviStar 应用入口。
+
+职责：
+  1. 创建 FastAPI 应用实例，注册 CORS 中间件和 API 路由。
+  2. 在 lifespan 中初始化日志、运行时配置、数据库表。
+  3. 启动 uvicorn 服务器，并可选地监听父进程（用于 GUI 嵌入模式）。
+"""
+
+import os
+import sys
 from contextlib import asynccontextmanager
 
-import uvicorn
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
-from common.config.app_settings import get_app_settings
+from app.api.v1.settings import settingsRouter
 from common.config.constants import API_DESCRIPTION, API_TITLE, API_VERSION
-from common.config.settings_config import load_runtime_settings
 from common.config.logger_config import setup_logger
-setup_logger()
-load_runtime_settings()
+
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w", encoding="utf-8")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w", encoding="utf-8")
+
 from common.config.sqlalchemy_config import create_tables
 
 from app.api.v1.agent import agentRouter
@@ -18,6 +31,7 @@ from app.api.v1.agent import agentRouter
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期：启动时初始化数据库表"""
+    setup_logger()
     await create_tables()
     yield
 
@@ -40,6 +54,5 @@ app.add_middleware(
 
 app.include_router(agentRouter, prefix="/ai")
 
-if __name__ == "__main__":
-    settings = get_app_settings()
-    uvicorn.run(app, host=settings.backend_host, port=settings.backend_port, log_level="warning")
+app.include_router(settingsRouter, prefix="/settings")
+

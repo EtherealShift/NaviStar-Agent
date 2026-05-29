@@ -12,20 +12,20 @@
 
 from typing import Any
 
-import httpx
+from httpx import AsyncClient
 from uapi.client import UapiClient, UapiError
 
 OPEN_METEO_GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
 OPEN_METEO_WEATHER_URL = "https://api.open-meteo.com/v1/forecast"
 
-_http: httpx.AsyncClient | None = None
+_http: AsyncClient
 
 
-def _http_client() -> httpx.AsyncClient:
+def _http_client() -> AsyncClient:
     """懒初始化的 HTTP 客户端单例，复用连接避免重复创建。"""
     global _http
     if _http is None or _http.is_closed:
-        _http = httpx.AsyncClient(timeout=10)
+        _http = AsyncClient(timeout=10)
     return _http
 
 

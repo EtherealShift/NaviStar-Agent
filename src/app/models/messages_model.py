@@ -1,5 +1,11 @@
+"""
+会话消息模型。
+
+MessagesModel 将 LangChain 的原生消息（HumanMessage/AIMessage/ToolMessage）
+转换为与数据库存储对齐的内部表示。MessageContentModel 是查询会话时的返回模型。
+"""
+
 import json
-from dataclasses import dataclass
 
 from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
 from pydantic import BaseModel, Field
@@ -7,7 +13,14 @@ from pydantic import BaseModel, Field
 
 
 class MessagesConversation(BaseModel):
+    """一次持久化操作的会话消息载体。
 
+    role:       Human / AI / AI_Thinking / Tool
+    thread_id:  所属对话线程 ID
+    content:    消息文本
+    title:      对话标题（用于列表展示）
+    meta_data:  附加元数据（附件、生成文件等）
+    """
     role: str = "Human"
     thread_id: str = "default"
     content: str = ""

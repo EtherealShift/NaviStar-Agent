@@ -1,3 +1,9 @@
+"""
+通用数据模型。
+
+定义跨模块使用的核心数据结构
+"""
+
 from dataclasses import dataclass
 from typing import Any
 
@@ -5,7 +11,11 @@ from langgraph.types import Checkpointer
 
 @dataclass
 class AgentModel:
-
+    """
+    组装 Agent 所需的所有配置参数。
+    """
+    # 模型供应商
+    supplier: str
     # 模型名称
     model_name: str
 
@@ -13,16 +23,19 @@ class AgentModel:
     system_prompt: str
 
     # 检查点
-    checkpointer: Checkpointer
+    checkpointer: Checkpointer | None = None
 
     # 工具
-    tools: list[Any]
+    tools: list[Any] | None = None
 
     # 中间件
-    middleware: list[Any]
+    middleware: list[Any] | None = None
 
     # 思考模式, {"type": "enabled"} 或 {"type": "disabled"}
     thinking: dict[str, str] | None = None
 
+    # 推理努力程度
+    reasoning_effort: str  = "medium"
+
     # 温度
-    temperature: float = 0.7
+    temperature: float | None = None

@@ -1,5 +1,4 @@
 from agent.runner import create_agent_with
-from common.config.constants import DEFAULT_MODEL_NAME
 from common.models.common_model import AgentModel
 
 

@@ -1,3 +1,16 @@
+"""
+应用层 after_agent 中间件。
+
+在 Agent 每轮对话完成后触发，负责：
+  1. 将消息按角色分类（Human / AI / AI_Thinking / Tool）。
+  2. 从 AI 消息中提取思考内容与输出内容，分别存储。
+  3. 从工具消息中收集生成的文件信息。
+  4. 持久化到 SQLite 数据库的 conversation / messages_group / message_content 三张表中。
+
+与 agent/middlewares/middleware.py 中的 SummarizationMiddleware（内置中间件）互补：
+前者处理上下文压缩，本模块处理数据持久化。
+"""
+
 from langchain.agents import AgentState
 from langchain.agents.middleware import after_agent
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
@@ -6,7 +19,6 @@ from loguru import logger
 
 from app.database.conversatuon_db import save_conversation
 from app.models.messages_model import MessagesModel, MessagesConversation
-from app.service.generated_file_service import extract_generated_files
 
 
 def _build_conversation_title(content: str) -> str:
@@ -70,7 +82,6 @@ async def _save_conversation(state: AgentState, runtime: Runtime):
 
         # 工具消息
         elif isinstance(msg, ToolMessage):
-            generated_files.extend(extract_generated_files(msg))
             records.append(MessagesModel(msg))
 
     messages_conversation: list[MessagesConversation] = []
@@ -79,8 +90,8 @@ async def _save_conversation(state: AgentState, runtime: Runtime):
         meta_data = {}
         if record.role == "Human":
             meta_data.update(getattr(record, "meta_data", {}) or {})
-        if record.role == "AI" and generated_files:
-            meta_data["files"] = generated_files
+        if record.role == "AI" :
+            meta_data.update(getattr(record, "meta_data", {}) or {})
 
         messages_conversation.append(
             MessagesConversation(
