@@ -16,15 +16,10 @@ async def update_settings(req: SettingsReq) -> Result:
     """
     更新模型设置。
     """
-
     if req.temperature is not None:
         settings.get("model")["temperature"] = req.temperature
     if req.reasoning_effort is not None:
         settings.get("model")["reasoning_effort"] = req.reasoning_effort
-    if req.supplier is not None:
-        settings.get("model")["supplier"] = req.supplier
-    if req.model_name is not None:
-        settings.get("model")["model_name"] = req.model_name
     try:
         with open(SUPPLIER_YAML_PATH, "w+") as f:
             yaml.dump(settings, f, default_flow_style=False)

@@ -22,9 +22,9 @@ async def update_app_settings(req: SettingsReq) -> Result:
     return await update_settings(req)
 
 
-@settingsRouter.get("/get_model_key")
+@settingsRouter.post("/update_model_key")
 async def get_model_key(req: ModelKeyReq) -> Result:
     """
-    获取模型密钥。
+    更新模型密钥。
     """
-    return Result(data=update_env_key(req)).success()
+    return update_env_key(req)

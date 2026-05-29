@@ -12,6 +12,9 @@ class AgentReq(BaseModel):
     # 是否思考
     thinking: bool = False
 
+    # 思考深度
+    reasoning_effort: str = "medium"
+
     # 线程ID
     thread_id: str = "default"
 

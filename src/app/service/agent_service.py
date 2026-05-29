@@ -2,31 +2,32 @@ import asyncio
 import json
 from datetime import datetime
 
-from langchain.agents import create_agent
+import yaml
 from langchain_core.messages import HumanMessage, ImageContentBlock, PlainTextContentBlock
 from langchain_core.runnables import RunnableConfig
-from langchain_deepseek import ChatDeepSeek
-from langchain_openai import ChatOpenAI
 from loguru import logger
 from openai import OpenAI
-
 from agent.memory.memory import get_checkpoint
-from agent.middlewares.middleware import install_summarization_middleware
 from agent.prompys.system_prompt import SYSTEM_PROMPT
+from agent.runner import create_agent_with
 from app.database.conversatuon_db import del_message_content, query_conversation, get_query_content_list
-from app.middlewares.middleware import install_after_middlewares
 from app.models.enty.conversation_messages import Conversation
 from app.models.req.agent_req import AgentReq
 from app.models.resp.query_resp import ConversationList
 from common.config.app_settings import AppSettings
-from common.config.constants import DEEPSEEK_BASE_URL, MIMO_BASE_URL
+from common.config.constants import DEEPSEEK_BASE_URL, MIMO_BASE_URL, SUPPLIER_YAML_PATH
+from common.models.common_model import AgentModel
 from common.models.file_model import MimeModel
 from common.models.result import Result
 import base64
 
 from common.utils.file_utils import supplier_yaml_path
 
-_thinking: dict[str, str] = {"type": "disabled"}
+
+def _require_api_key(value: str, env_name: str) -> str:
+    if value and value.strip():
+        return value
+    raise ValueError(f"{env_name} must be set in src/resources/.env or saved from Settings.")
 
 
 async def get_checkpointer_dep():
@@ -35,6 +36,14 @@ async def get_checkpointer_dep():
 
 def _stream_payload(payload: dict) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _thinking_config(enabled: bool) -> dict[str, str]:
+    """
+    构建思考模式配置
+    """
+    logger.info("Thinking mode: {}", "enabled" if enabled else "disabled")
+    return {"type": "enabled" if enabled else "disabled"}
 
 
 def _build_human_message(req: AgentReq) -> HumanMessage:
@@ -83,59 +92,40 @@ async def chat_stream(req: AgentReq):
     :param req:
     """
     async def event_generator():
-        global _thinking, llm
         try:
-            # 开启思考模式
-            if req.thinking:
-                logger.info("Thinking...")
-                _thinking = {"type": "enabled"}
-
-            # 启用网络工具 已默认装载 联网模块
-            # if req.is_network:
-            #     logger.info("Network tools enabled.")
-            # logger.info("Skill report: {}", skill_report)
-
+            # 思考模式
+            thinking_config = _thinking_config(req.thinking)
 
             checkpointer = await get_checkpointer_dep()
 
-            # 获取配置
-            settings = AppSettings()
+            settings = supplier_yaml_path()
 
-            # 获取模型配置
-            supplier_yaml = supplier_yaml_path().get("model", {})
+            if req.supplier and req.supplier != settings.get("model").get("supplier"):
+                settings.get("model")["supplier"] = req.supplier
+            if req.reasoning_effort and req.reasoning_effort != settings.get("model").get("reasoning_effort"):
+                settings.get("model")["reasoning_effort"] = req.reasoning_effort
+            if req.model_name and req.model_name != settings.get("model").get("model_name"):
+                settings.get("model")["model_name"] = req.model_name
+            try:
+                with open(SUPPLIER_YAML_PATH, "w+") as f:
+                    yaml.dump(settings, f, default_flow_style=False)
+            except Exception as e:
+                logger.error(e)
 
-            llm_kwargs = {
-                "model": req.model_name,
-                "thinking": req.thinking,
-                "streaming": True,
-                "temperature": supplier_yaml.get("temperature", 1.0) ,
-                "reasoning_effort": supplier_yaml.get("reasoning_effort", "medium") ,
-            }
-
-            if req.supplier == "deepseek":
-                llm = ChatDeepSeek(**llm_kwargs)
-            if req.supplier == "openai":
-                llm = ChatOpenAI(**llm_kwargs)
-            if req.supplier == "xiaomi":
-                llm_kwargs["api_key"] = settings.mimo_api_key
-                llm_kwargs["base_url"] = MIMO_BASE_URL
-                llm = ChatOpenAI(**llm_kwargs)
-
-            # 安装中间件
-            middlewares = install_summarization_middleware(llm)
-            # 安装附加中间件
-            install_after_middlewares(middlewares)
-
-
-            agent = create_agent(
-                model=llm,
-                checkpointer=checkpointer,
-                middleware=middlewares,
-                system_prompt=SYSTEM_PROMPT.format(
-                    today=datetime.now().strftime("%Y年%m月%d日")
-                ),
-                tools=[],
+            # 创建代理
+            agent = create_agent_with(
+                AgentModel(
+                    supplier=req.supplier,
+                    model_name=req.model_name,
+                    system_prompt=SYSTEM_PROMPT.format(
+                        today=datetime.now().strftime("%Y年%m月%d日"),
+                    ),
+                    thinking=thinking_config,
+                    checkpointer=checkpointer,
+                    tools=[],
+                )
             )
+
 
             state = {"messages": [_build_human_message(req)]}
             # 状态
@@ -153,7 +143,7 @@ async def chat_stream(req: AgentReq):
             if hasattr(e, 'exceptions'):
                 ex_msg = str(e.exceptions)
             logger.error("流式输出异常: {}", ex_msg)
-            yield f'data: {{"error": "{ex_msg}"}}\n\n'
+            yield _stream_payload({"error": ex_msg})
 
     return event_generator()
 
@@ -225,23 +215,21 @@ async def chat_model_list() -> Result:
     settings = AppSettings()
 
     # 获取当前模型列表
-    model_list = []
+    model_list = {}
 
     deepseek_models = OpenAI(
-        api_key=settings.deepseek_api_key,
+        api_key=_require_api_key(settings.deepseek_api_key, "DEEPSEEK_API_KEY"),
         base_url=DEEPSEEK_BASE_URL,
     ).models.list()
 
-    for model in deepseek_models:
-        model_list.append(model.id)
+    model_list["deepseek"] = [model.id for model in deepseek_models]
 
     # 添加其他模型列表
-    model_list.append("xiaomi-v2.5-pro")
-    model_list.append("xiaomi-v2.5")
+    model_list["mimo"] = ["mimo-v2.5-pro", "mimo-v2.5"]
 
     logger.info("Model list: {}", model_list)
 
-    return Result(data="").success()
+    return Result(data=model_list).success()
 
 if __name__ == "__main__":
     asyncio.run(chat_model_list())

@@ -64,6 +64,13 @@ export async function saveSettings(settings) {
   });
 }
 
+export async function saveModelKey(supplier, apiKey) {
+  return request("/settings/update_model_key", {
+    method: "POST",
+    body: JSON.stringify({ supplier, api_key: apiKey }),
+  });
+}
+
 export async function fetchModelList() {
   const result = await request("/ai/chat/model_list", { method: "POST" });
   return result.data;

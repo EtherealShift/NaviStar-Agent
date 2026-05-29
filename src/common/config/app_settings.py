@@ -16,4 +16,3 @@ class AppSettings(BaseSettings):
     deepseek_api_key: str = ""
 
     one_api_key: str = ""
-

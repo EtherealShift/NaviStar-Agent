@@ -4,10 +4,11 @@
 定义跨模块使用的核心数据结构
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from langgraph.types import Checkpointer
+
 
 @dataclass
 class AgentModel:
@@ -32,10 +33,4 @@ class AgentModel:
     middleware: list[Any] | None = None
 
     # 思考模式, {"type": "enabled"} 或 {"type": "disabled"}
-    thinking: dict[str, str] | None = None
-
-    # 推理努力程度
-    reasoning_effort: str  = "medium"
-
-    # 温度
-    temperature: float | None = None
+    thinking: dict[str, str]  = field(default_factory={"type": "disabled"})

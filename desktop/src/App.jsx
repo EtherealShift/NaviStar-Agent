@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Atom,
   ArrowLeft,
   ArrowRight,
   ArrowUp,
   Check,
   CheckIcon,
   ChevronDown,
+  ChevronRight,
   FilePlus2,
   Globe2,
   Loader2,
@@ -26,26 +28,109 @@ import {
   fetchMessages,
   fetchModelList,
   fetchSettings,
+  saveModelKey,
   saveSettings,
   streamChatMessage,
 } from "@/api/navistarApi";
 import { Badge, Button, Input, Textarea } from "@/components/ui";
 import { cn, formatTime, makeThreadId } from "@/lib/utils";
 
-const supplierModels = {
-  deepseek: ["deepseek_v4_pro", "deepseek-v4-flash", "deepseek-chat"],
-  openai: ["gpt-5.1", "gpt-5.1-mini", "gpt-4.1"],
-  xiaomi: ["xiaomi-v2.5-pro", "xiaomi-v2.5"],
+const modelAliases = {
+  deepseek_v4_pro: "deepseek-v4-pro",
+  deepseek_v4_flash: "deepseek-v4-flash",
+  "xiaomi-v2.5-pro": "mimo-v2.5-pro",
+  "xiaomi-v2.5": "mimo-v2.5",
 };
 
-const reasoningOptions = ["low", "medium", "high"];
+const supplierAliases = {
+  xiaomi: "mimo",
+};
 
-function normalizeSettings(settings) {
+const fallbackModelCatalog = {
+  deepseek: ["deepseek-v4-flash", "deepseek-v4-pro"],
+  mimo: ["mimo-v2.5-pro", "mimo-v2.5"],
+};
+
+const reasoningOptions = ["low", "medium", "high", "xhigh"];
+
+function formatModelLabel(model) {
+  return (model || "")
+    .replace(/^gpt-/i, "GPT ")
+    .replace(/^deepseek-v4-/i, "DeepSeek V4 ")
+    .replace(/^mimo-v2\.5-/i, "Mimo V2.5 ")
+    .replace(/-/g, " ")
+    .replace(/\bmini\b/i, "Mini")
+    .replace(/\bpro\b/i, "Pro")
+    .replace(/\bflash\b/i, "Flash");
+}
+
+function formatModelTrigger(model) {
+  const value = model || "";
+  const firstDash = value.indexOf("-");
+  return firstDash >= 0 ? value.slice(firstDash + 1) : value;
+}
+
+function formatSupplierLabel(supplier) {
+  const labels = {
+    deepseek: "DeepSeek",
+    mimo: "Mimo",
+    openai: "OpenAI",
+  };
+  return labels[supplier] || supplier || "Model";
+}
+
+function sanitizeModelCatalog(data) {
+  const source = data && typeof data === "object" ? data : {};
+  const catalog = Object.entries(source).reduce((acc, [supplier, models]) => {
+    if (!Array.isArray(models)) return acc;
+    const key = supplierAliases[supplier] || supplier;
+    const cleanModels = models
+      .map((model) => modelAliases[model] || model)
+      .filter((model) => typeof model === "string" && model.trim())
+      .map((model) => model.trim());
+    if (!cleanModels.length) return acc;
+    acc[key] = [...new Set([...(acc[key] || []), ...cleanModels])];
+    return acc;
+  }, {});
+  return Object.keys(catalog).length ? catalog : fallbackModelCatalog;
+}
+
+function getModelOptions(modelCatalog) {
+  return Object.entries(sanitizeModelCatalog(modelCatalog)).flatMap(([supplier, models]) =>
+    models.map((model) => ({ model, supplier })),
+  );
+}
+
+function getFirstSupplier(modelCatalog) {
+  return Object.keys(sanitizeModelCatalog(modelCatalog))[0] || "deepseek";
+}
+
+function findModelSupplier(model, modelCatalog) {
+  const catalog = sanitizeModelCatalog(modelCatalog);
+  return Object.entries(catalog).find(([, models]) => models.includes(model))?.[0];
+}
+
+function formatModelListStatus(modelCatalog) {
+  const catalog = sanitizeModelCatalog(modelCatalog);
+  const modelCount = Object.values(catalog).reduce((total, models) => total + models.length, 0);
+  return `${Object.keys(catalog).length} 个供应商 / ${modelCount} 个模型`;
+}
+
+function normalizeSettings(settings = {}, modelCatalog = fallbackModelCatalog) {
+  const catalog = sanitizeModelCatalog(modelCatalog);
+  const firstSupplier = getFirstSupplier(catalog);
+  const requestedSupplier = supplierAliases[settings.supplier] || settings.supplier;
+  let supplier = catalog[requestedSupplier] ? requestedSupplier : firstSupplier;
+  let modelName = modelAliases[settings.model_name] || settings.model_name || "";
+  const modelSupplier = findModelSupplier(modelName, catalog);
+  if (modelSupplier) supplier = modelSupplier;
+  const fallbackModel = catalog[supplier]?.[0] || catalog[firstSupplier]?.[0] || "";
+  if (!catalog[supplier]?.includes(modelName)) modelName = fallbackModel;
   return {
-    supplier: settings.supplier || "deepseek",
-    model_name: settings.model_name || "deepseek_v4_pro",
+    supplier,
+    model_name: modelName,
     temperature: Number(settings.temperature ?? 1),
-    reasoning_effort: settings.reasoning_effort || "medium",
+    reasoning_effort: reasoningOptions.includes(settings.reasoning_effort) ? settings.reasoning_effort : "medium",
   };
 }
 
@@ -55,6 +140,7 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [settings, setSettings] = useState(normalizeSettings({}));
+  const [modelCatalog, setModelCatalog] = useState(fallbackModelCatalog);
   const [apiKey, setApiKey] = useState("");
   const [thinking, setThinking] = useState(true);
   const [networkEnabled, setNetworkEnabled] = useState(false);
@@ -89,10 +175,17 @@ function App() {
   async function boot() {
     setLoading(true);
     try {
-      const [settingsData, conversationData] = await Promise.all([fetchSettings(), fetchConversations()]);
-      setSettings(normalizeSettings(settingsData));
+      const [settingsData, conversationData, modelData] = await Promise.all([
+        fetchSettings(),
+        fetchConversations(),
+        fetchModelList().catch(() => null),
+      ]);
+      const catalog = sanitizeModelCatalog(modelData);
+      setModelCatalog(catalog);
+      setSettings(normalizeSettings(settingsData, catalog));
       setConversations(conversationData);
       setStatus("后端已连接");
+      setModelListStatus(formatModelListStatus(catalog));
     } catch (error) {
       setStatus(error.message);
     } finally {
@@ -182,6 +275,7 @@ function App() {
           model_name: settings.model_name,
           human_message: content,
           thinking,
+          reasoning_effort: settings.reasoning_effort,
           thread_id: activeThreadId,
           supplier: settings.supplier,
           attachments: [],
@@ -219,7 +313,9 @@ function App() {
   async function persistSettings() {
     localStorage.setItem("navistar.apiKey", apiKey);
     try {
-      await saveSettings(settings);
+      const nextSettings = normalizeSettings(settings, modelCatalog);
+      await saveSettings(nextSettings);
+      if (apiKey.trim()) await saveModelKey(nextSettings.supplier, apiKey.trim());
       setStatus("设置已保存");
     } catch (error) {
       setStatus(error.message);
@@ -229,8 +325,10 @@ function App() {
   async function inspectModels() {
     setModelListStatus("同步中");
     try {
-      const data = await fetchModelList();
-      setModelListStatus(data ? "已返回数据" : "后端 data 为空");
+      const catalog = sanitizeModelCatalog(await fetchModelList());
+      setModelCatalog(catalog);
+      setSettings((value) => normalizeSettings(value, catalog));
+      setModelListStatus(formatModelListStatus(catalog));
     } catch (error) {
       setModelListStatus(error.message);
     }
@@ -264,8 +362,8 @@ function App() {
   }
 
   return (
-    <main className="h-screen overflow-hidden bg-background p-2 text-foreground">
-      <div className="flex h-full flex-col overflow-hidden rounded-xl bg-sidebar">
+    <main className="h-screen overflow-hidden bg-sidebar text-foreground">
+      <div className="flex h-full flex-col overflow-hidden bg-sidebar">
         <TopBar
           activeView={activeView}
           canGoBack={backStack.length > 0}
@@ -302,6 +400,7 @@ function App() {
             {activeView === "settings" ? (
               <SettingsPage
                 apiKey={apiKey}
+                modelCatalog={modelCatalog}
                 modelListStatus={modelListStatus}
                 onApiKeyChange={setApiKey}
                 onInspectModels={inspectModels}
@@ -318,6 +417,8 @@ function App() {
                       input={input}
                       networkEnabled={networkEnabled}
                       onInputChange={setInput}
+                      modelCatalog={modelCatalog}
+                      onModelChange={(model_name, supplier = settings.supplier) => setSettings({ ...settings, model_name, supplier })}
                       onNetworkChange={setNetworkEnabled}
                       onReasoningChange={(reasoning_effort) => setSettings({ ...settings, reasoning_effort })}
                       onSubmit={submitMessage}
@@ -338,8 +439,10 @@ function App() {
                 {hasMessages && (
                   <ComposerDock
                   input={input}
+                  modelCatalog={modelCatalog}
                   networkEnabled={networkEnabled}
                   onInputChange={setInput}
+                  onModelChange={(model_name, supplier = settings.supplier) => setSettings({ ...settings, model_name, supplier })}
                   onNetworkChange={setNetworkEnabled}
                   onReasoningChange={(reasoning_effort) => setSettings({ ...settings, reasoning_effort })}
                   onSubmit={submitMessage}
@@ -489,7 +592,6 @@ function EmptyConversation(props) {
     <div className="grid h-full content-center justify-items-center px-8 pb-16">
       <div className="mb-8 text-center">
         <h2 className="text-3xl font-semibold">开始新对话</h2>
-        <p className="mt-2 text-sm text-muted-foreground">选择模型，输入任务，小星会用流式响应返回结果。</p>
       </div>
       <ChatBox className="w-full max-w-[820px]" {...props} />
     </div>
@@ -510,8 +612,10 @@ function ChatBox({
   className,
   compact = false,
   input,
+  modelCatalog,
   networkEnabled,
   onInputChange,
+  onModelChange,
   onNetworkChange,
   onReasoningChange,
   onSubmit,
@@ -527,20 +631,29 @@ function ChatBox({
         value={input}
         onChange={(event) => onInputChange(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) onSubmit();
+          if (event.nativeEvent.isComposing) return;
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            onSubmit();
+          }
         }}
-        placeholder={`给 ${settings.supplier === "deepseek" ? "DeepSeek" : settings.supplier} 发送消息`}
+        placeholder="给小星发送消息"
       />
       <div className="flex items-center justify-between px-3 pb-3">
         <div className="flex items-center gap-2">
-          <ToggleChip active={thinking} label="思考" onClick={() => onThinkingChange(!thinking)} />
-          <ToggleChip active={networkEnabled} icon={Globe2} label="搜索" onClick={() => onNetworkChange(!networkEnabled)} />
+          <ToggleChip active={thinking} icon={Atom} label="深度思考" onClick={() => onThinkingChange(!thinking)} />
+          <ToggleChip active={networkEnabled} icon={Globe2} label="智能搜索" onClick={() => onNetworkChange(!networkEnabled)} />
+          <ToggleChip icon={FilePlus2} label="附件接口未接入后端" />
         </div>
         <div className="flex items-center gap-2">
-          <button className="rounded-md p-2 text-muted-foreground transition hover:bg-accent hover:text-foreground" title="附件接口未接入后端">
-            <FilePlus2 />
-          </button>
-          <ReasoningMenu value={settings.reasoning_effort} onChange={onReasoningChange} />
+          <ModelReasoningMenu
+            modelCatalog={modelCatalog}
+            modelValue={settings.model_name}
+            onModelChange={onModelChange}
+            onReasoningChange={onReasoningChange}
+            reasoningValue={settings.reasoning_effort}
+            supplier={settings.supplier}
+          />
           <button
             className="grid size-9 place-items-center rounded-full bg-primary text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             disabled={!input.trim() || streaming}
@@ -558,18 +671,20 @@ function ToggleChip({ active, icon: Icon, label, onClick }) {
   return (
     <button
       className={cn(
-        "flex h-8 items-center gap-1.5 rounded-full border border-border px-3 text-xs transition",
-        active ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground",
+        "grid size-8 place-items-center rounded-full border border-border text-muted-foreground transition",
+        active ? "border-ring/50 bg-accent text-foreground" : "hover:bg-accent hover:text-foreground",
       )}
+      aria-label={label}
       onClick={onClick}
+      title={label}
+      type="button"
     >
       {Icon && <Icon />}
-      {label}
     </button>
   );
 }
 
-function SelectMenu({ options, value, onChange }) {
+function SelectMenu({ formatOption = (option) => option, options, value, onChange }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
 
@@ -592,7 +707,7 @@ function SelectMenu({ options, value, onChange }) {
         type="button"
         onClick={() => setOpen((value) => !value)}
       >
-        <span className="truncate">{value}</span>
+        <span className="truncate">{formatOption(value)}</span>
         <ChevronDown className={cn("text-muted-foreground transition", open && "rotate-180")} />
       </button>
       {open && (
@@ -610,7 +725,7 @@ function SelectMenu({ options, value, onChange }) {
                 setOpen(false);
               }}
             >
-              <span className="truncate">{option}</span>
+              <span className="truncate">{formatOption(option)}</span>
               {option === value && <CheckIcon />}
             </button>
           ))}
@@ -620,10 +735,16 @@ function SelectMenu({ options, value, onChange }) {
   );
 }
 
-function ReasoningMenu({ value, onChange }) {
+function ModelReasoningMenu({ modelCatalog, modelValue, onModelChange, onReasoningChange, reasoningValue, supplier }) {
   const [open, setOpen] = useState(false);
+  const [modelsOpen, setModelsOpen] = useState(false);
   const rootRef = useRef(null);
-  const labels = { low: "低", medium: "中", high: "高" };
+  const labels = { low: "低", medium: "中", high: "高", xhigh: "超高" };
+  const catalog = sanitizeModelCatalog(modelCatalog);
+  const modelOptions = getModelOptions(catalog);
+  const activeSupplier = findModelSupplier(modelValue, catalog) || supplier;
+  const supplierLabel = formatSupplierLabel(activeSupplier);
+  const modelLabel = formatModelTrigger(modelValue);
 
   useEffect(() => {
     if (!open) return;
@@ -636,34 +757,83 @@ function ReasoningMenu({ value, onChange }) {
 
   return (
     <div ref={rootRef} className="relative">
-      <button
-        className="flex h-9 items-center gap-1 rounded-full bg-muted px-3 text-sm transition hover:bg-accent"
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-      >
-        <span>{labels[value] || value}</span>
-        <ChevronDown />
-      </button>
+      <div className="flex h-9 items-center gap-1 text-xs">
+        <span className="max-w-20 truncate rounded-lg bg-muted px-2.5 py-2 text-xs text-foreground">{supplierLabel}</span>
+        <button
+          className={cn(
+            "flex h-9 items-center gap-1 rounded-full px-3 text-xs transition hover:bg-muted",
+            open && "bg-muted",
+          )}
+          type="button"
+          onClick={() => {
+            setOpen((value) => !value);
+            setModelsOpen(false);
+          }}
+        >
+          <span className="text-xs text-foreground">{modelLabel}</span>
+          <span className="text-xs text-muted-foreground">{labels[reasoningValue] || reasoningValue}</span>
+          <ChevronDown />
+        </button>
+      </div>
       {open && (
-        <div className="absolute bottom-11 right-0 z-20 w-48 rounded-2xl border border-border bg-popover p-2 shadow-[0_18px_48px_rgba(0,0,0,0.35)]">
-          <div className="px-2 pb-1 text-xs font-medium text-muted-foreground">思考深度</div>
+        <div className="absolute bottom-11 right-0 z-20 w-56 rounded-2xl border border-border bg-popover p-2 text-[11px] shadow-[0_18px_48px_rgba(0,0,0,0.35)]">
+          {modelsOpen && (
+            <div
+              className="absolute bottom-0 right-[calc(100%+8px)] w-64 rounded-2xl border border-border bg-popover p-2 text-[11px] shadow-[0_18px_48px_rgba(0,0,0,0.35)]"
+              onMouseEnter={() => setModelsOpen(true)}
+              onMouseLeave={() => setModelsOpen(false)}
+            >
+              <div className="px-3 pb-1.5 text-[11px] font-medium text-muted-foreground">模型</div>
+              {modelOptions.map(({ model, supplier: optionSupplier }) => (
+                <button
+                  key={`${optionSupplier}-${model}`}
+                  className={cn(
+                    "grid h-8 w-full grid-cols-[72px_minmax(0,1fr)_16px] items-center gap-2 rounded-xl px-3 text-left text-[11px] transition hover:bg-accent",
+                    model === modelValue && "bg-accent text-foreground",
+                  )}
+                  type="button"
+                  onClick={() => {
+                    onModelChange(model, optionSupplier);
+                    setModelsOpen(false);
+                    setOpen(false);
+                  }}
+                >
+                  <span className="truncate text-muted-foreground">{formatSupplierLabel(optionSupplier)}</span>
+                  <span className="truncate text-right text-foreground">{formatModelTrigger(model)}</span>
+                  <span className="flex justify-end">{model === modelValue && <CheckIcon />}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="px-3 pb-1.5 text-[11px] font-medium text-muted-foreground">智能</div>
           {reasoningOptions.map((option) => (
             <button
               key={option}
               className={cn(
-                "flex h-9 w-full items-center justify-between rounded-xl px-3 text-sm transition hover:bg-accent",
-                option === value && "bg-accent text-foreground",
+                "flex h-8 w-full items-center justify-between rounded-xl px-3 text-[11px] transition hover:bg-accent",
+                option === reasoningValue && "bg-accent text-foreground",
               )}
               type="button"
+              onMouseEnter={() => setModelsOpen(false)}
               onClick={() => {
-                onChange(option);
-                setOpen(false);
+                onReasoningChange(option);
               }}
             >
               <span>{labels[option]}</span>
-              {option === value && <CheckIcon />}
+              {option === reasoningValue && <CheckIcon />}
             </button>
           ))}
+          <div className="my-2 h-px bg-border" />
+          <button
+            className="grid h-8 w-full grid-cols-[72px_minmax(0,1fr)_16px] items-center gap-2 rounded-xl bg-accent px-3 text-left text-[11px] transition hover:bg-accent"
+            type="button"
+            onMouseEnter={() => setModelsOpen(true)}
+            onFocus={() => setModelsOpen(true)}
+          >
+            <span className="truncate text-muted-foreground">{supplierLabel}</span>
+            <span className="truncate text-right">{modelLabel}</span>
+            <ChevronRight className="justify-self-end text-muted-foreground" />
+          </button>
         </div>
       )}
     </div>
@@ -687,29 +857,35 @@ function Message({ message }) {
   );
 }
 
-function SettingsPage({ apiKey, modelListStatus, onApiKeyChange, onInspectModels, onSave, settings, setSettings, status }) {
+function SettingsPage({ apiKey, modelCatalog, modelListStatus, onApiKeyChange, onInspectModels, onSave, settings, setSettings, status }) {
+  const catalog = sanitizeModelCatalog(modelCatalog);
+  const supplierOptions = Object.keys(catalog);
+  const modelOptions = catalog[settings.supplier] || catalog[getFirstSupplier(catalog)] || [];
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-8 py-8">
       <div className="mx-auto max-w-[760px]">
         <h2 className="text-2xl font-semibold">设置</h2>
-        <p className="mt-2 text-sm text-muted-foreground">保存模型参数。API Key 暂存在本地，后端接口补齐后可改为服务端保存。</p>
+        <p className="mt-2 text-sm text-muted-foreground">保存模型参数。API Key 会写入后端环境配置。</p>
 
         <div className="mt-8 grid gap-5">
           <SettingField label="供应商">
             <SelectMenu
-              options={["deepseek", "openai", "xiaomi"]}
+              options={supplierOptions}
               value={settings.supplier}
               onChange={(supplier) => {
-                const nextModels = supplierModels[supplier] || supplierModels.deepseek;
+                const nextModels = catalog[supplier] || [];
                 setSettings({ ...settings, supplier, model_name: nextModels[0] });
               }}
+              formatOption={formatSupplierLabel}
             />
           </SettingField>
           <SettingField label="模型">
             <SelectMenu
-              options={supplierModels[settings.supplier] || supplierModels.deepseek}
+              options={modelOptions}
               value={settings.model_name}
               onChange={(model_name) => setSettings({ ...settings, model_name })}
+              formatOption={formatModelLabel}
             />
           </SettingField>
           <SettingField label="API Key">
