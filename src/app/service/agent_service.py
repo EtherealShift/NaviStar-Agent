@@ -1,16 +1,19 @@
 import asyncio
 import json
+from pathlib import Path
 from datetime import datetime
 
 import yaml
-from langchain_core.messages import HumanMessage, ImageContentBlock, PlainTextContentBlock
+from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from loguru import logger
 from openai import OpenAI
 from agent.memory.memory import get_checkpoint
 from agent.prompys.system_prompt import SYSTEM_PROMPT
 from agent.runner import create_agent_with
+from agent.tools.tools import install_tools
 from app.database.conversatuon_db import del_message_content, query_conversation, get_query_content_list
+from app.mcp.service.mcp_service import get_mcp_client
 from app.models.enty.conversation_messages import Conversation
 from app.models.req.agent_req import AgentReq
 from app.models.resp.query_resp import ConversationList
@@ -50,37 +53,45 @@ def _build_human_message(req: AgentReq) -> HumanMessage:
     """
     构建用户消息
     """
-    file_paths = req.attachments
+    file_paths = req.attachments or []
+    display_content = req.human_message or ""
 
-    content_blocks = []
+    if not file_paths:
+        return HumanMessage(
+            content=display_content,
+            additional_kwargs={"display_content": display_content},
+        )
 
-    mime_list =[]
+    content_blocks: list[dict] = []
+    if display_content:
+        content_blocks.append({"type": "text", "text": display_content})
+
     for file_path in file_paths:
-        mime_list.append(MimeModel(file_path))
+        mime = MimeModel(file_path)
+        raw = Path(mime.file_path).read_bytes()
+        encoded = base64.b64encode(raw).decode("utf-8")
 
-
-    for mime in mime_list:
-        base64_image = base64.b64encode(open(mime.file_path, "rb").read()).decode('utf-8')
         if mime.file_type == "image":
-            content_blocks.append(
-                ImageContentBlock(
-                    type="image",
-                    mime_type=mime.mime_type,
-                    base64=base64_image
-                )
-            )
-        if mime.file_path == "plaintext":
-            content_blocks.append(
-                PlainTextContentBlock(
-                    type="text-plain",
-                    mime_type=mime.mime_type,
-                    base64=base64_image
-                )
-            )
+            content_blocks.append({
+                "type": "image",
+                "source_type": "base64",
+                "mime_type": mime.mime_type,
+                "data": encoded,
+            })
+        else:
+            content_blocks.append({
+                "type": "file",
+                "mime_type": mime.mime_type,
+                "filename": Path(mime.file_path).name,
+                "data": encoded,
+            })
 
     return HumanMessage(
-        content=req.human_message,
-        content_blocks=content_blocks
+        content=content_blocks,
+        additional_kwargs={
+            "display_content": display_content,
+            "attachments": file_paths,
+        },
     )
 
 
@@ -112,6 +123,11 @@ async def chat_stream(req: AgentReq):
             except Exception as e:
                 logger.error(e)
 
+            # 装载工具
+            tools = await install_tools()
+            # 装载mcp服务
+            tools.extend(await get_mcp_client())
+
             # 创建代理
             agent = create_agent_with(
                 AgentModel(
@@ -122,7 +138,7 @@ async def chat_stream(req: AgentReq):
                     ),
                     thinking=thinking_config,
                     checkpointer=checkpointer,
-                    tools=[],
+                    tools=tools,
                 )
             )
 
@@ -134,9 +150,9 @@ async def chat_stream(req: AgentReq):
             async for event in agent.astream_events(state, config, version="v2"):
                 chunk = event.get("data", {}).get("chunk")
                 if chunk and hasattr(chunk, "content") and chunk.content:
-                    yield _stream_payload({"type": "text", "content": chunk.content})
-                if chunk and hasattr(chunk, "additional_kwargs") and chunk.additional_kwargs:
-                    yield _stream_payload({"type": "thinking", "content": chunk.additional_kwargs})
+                    yield _stream_payload({"type": "AI", "content": chunk.content})
+                if chunk and hasattr(chunk, "additional_kwargs") and chunk.additional_kwargs.get("reasoning_content"):
+                        yield _stream_payload({"type": "AI_Thinking", "content": chunk.additional_kwargs.get("reasoning_content")})
             yield "data: [DONE]\n\n"
         except Exception as e:
             ex_msg = str(e)

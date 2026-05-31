@@ -6,14 +6,11 @@ from ddgs import DDGS
 from langchain_core.tools import tool, BaseTool
 from langchain_tavily import TavilySearch
 from loguru import logger
-from app.tools.captured_tools import douyin_fetch_video_detail, douyin_fetch_video_list
 from common.utils.tool_utils import geocode_city, get_weather_city
 
 """
 Agent 可调用的工具注册
 """
-
-
 
 @tool(description="用于查询城市经纬度信息")
 async def get_geocode(
@@ -74,9 +71,9 @@ async def install_tools() -> list[BaseTool]:
         get_geocode,
         get_weather,
         get_location_by_ip,
-        douyin_fetch_video_detail,
-        douyin_fetch_video_list,
-        web_search_text,
+        # douyin_fetch_video_detail,
+        # douyin_fetch_video_list,
+        # web_search_text,
     ]
 
 

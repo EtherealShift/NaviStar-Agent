@@ -76,6 +76,43 @@ export async function fetchModelList() {
   return result.data;
 }
 
+export async function fetchMcpServers() {
+  const result = await request("/mcp/servers", { method: "GET" });
+  return result.data || [];
+}
+
+export async function createMcpServer(server) {
+  return request("/mcp/servers", {
+    method: "POST",
+    body: JSON.stringify(server),
+  });
+}
+
+export async function updateMcpServer(serverId, server) {
+  return request(`/mcp/servers/${encodeURIComponent(serverId)}`, {
+    method: "PUT",
+    body: JSON.stringify(server),
+  });
+}
+
+export async function deleteMcpServer(serverId) {
+  return request(`/mcp/servers/${encodeURIComponent(serverId)}`, { method: "DELETE" });
+}
+
+export async function toggleMcpServer(serverId, enabled) {
+  return request(`/mcp/servers/${encodeURIComponent(serverId)}/toggle`, {
+    method: "POST",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export async function testMcpServer(server) {
+  return request("/mcp/servers/test", {
+    method: "POST",
+    body: JSON.stringify(server),
+  });
+}
+
 export async function streamChatMessage(payload, handlers = {}) {
   const baseUrl = await getApiBaseUrl();
   const response = await fetch(`${baseUrl}/ai/chat/send/stream`, {
@@ -112,8 +149,8 @@ export async function streamChatMessage(payload, handlers = {}) {
         try {
           const event = JSON.parse(raw);
           if (event.error) handlers.onError?.(event.error);
-          if (event.type === "text") handlers.onText?.(event.content || "");
-          if (event.type === "thinking") handlers.onThinking?.(event.content || "");
+          if (event.type === "AI" || event.type === "text") handlers.onText?.(event.content || "");
+          if (event.type === "AI_Thinking" || event.type === "thinking") handlers.onThinking?.(event.content || "");
           if (event.type?.startsWith("tool_")) handlers.onTool?.(event);
         } catch {
           handlers.onText?.(raw);

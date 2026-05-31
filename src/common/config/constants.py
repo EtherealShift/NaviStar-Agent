@@ -19,6 +19,7 @@ ENV_PATH = os.path.join(RESOURCES, ".env")
 CONFIG_JSON = os.path.join(RESOURCES, "config.json")
 SUPPLIER_YAML_PATH = os.path.join(RESOURCES, "supplier.yaml")
 LOG_DIR = os.path.join(RESOURCES, "log")
+MCP_SERVER_PATH = os.path.join(RESOURCES, "mcp_server.json")
 
 # ------------------------ Database ------------------------
 DEFAULT_DB_FILENAME = "navistar.db"

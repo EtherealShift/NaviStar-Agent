@@ -5,8 +5,10 @@
 """
 
 from dataclasses import dataclass, field
+from types import CoroutineType
 from typing import Any
 
+from langchain_core.tools import BaseTool
 from langgraph.types import Checkpointer
 
 
@@ -27,7 +29,7 @@ class AgentModel:
     checkpointer: Checkpointer | None = None
 
     # 工具
-    tools: list[Any] | None = None
+    tools: list[BaseTool] = None
 
     # 中间件
     middleware: list[Any] | None = None

@@ -11,6 +11,21 @@ from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
 from pydantic import BaseModel, Field
 
 
+def _stringify_human_content(content) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict):
+                text = block.get("text") or block.get("content")
+                if isinstance(text, str):
+                    parts.append(text)
+            elif isinstance(block, str):
+                parts.append(block)
+        return "\n".join(parts) if parts else ""
+    return str(content)
+
 
 class MessagesConversation(BaseModel):
     """一次持久化操作的会话消息载体。
@@ -41,9 +56,7 @@ class MessagesModel:
         if isinstance(msg, HumanMessage):
             self.role = "Human"
             display_content = msg.additional_kwargs.get("display_content")
-            self.content = display_content if isinstance(display_content, str) else (
-                msg.content if isinstance(msg.content, str) else str(msg.content)
-            )
+            self.content = display_content if isinstance(display_content, str) else _stringify_human_content(msg.content)
             attachments = msg.additional_kwargs.get("attachments")
             if attachments:
                 self.meta_data["files"] = attachments
