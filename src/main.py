@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
+from app.api.v1.mcps import mcpsRouter
 from app.api.v1.settings import settingsRouter
 from common.config.constants import API_DESCRIPTION, API_TITLE, API_VERSION
 from common.config.logger_config import setup_logger
@@ -55,4 +56,6 @@ app.add_middleware(
 app.include_router(agentRouter, prefix="/ai")
 
 app.include_router(settingsRouter, prefix="/settings")
+
+app.include_router(mcpsRouter, prefix="/mcp")
 
