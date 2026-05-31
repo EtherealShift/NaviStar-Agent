@@ -75,7 +75,7 @@ const fallbackModelCatalog = {
 };
 
 const reasoningOptions = ["low", "medium", "high", "xhigh"];
-const sidebarResizeBounds = { min: 214, max: 340, hideInset: 10 };
+const sidebarResizeBounds = { min: 160, max: 280, hideInset: 10 };
 
 const settingsSections = [
   { id: "general", label: "常规", icon: Settings },
@@ -402,7 +402,7 @@ function App() {
   const [backStack, setBackStack] = useState([]);
   const [forwardStack, setForwardStack] = useState([]);
   const [sidebarVisible, setSidebarVisible] = useState(true);
-  const [sidebarWidth, setSidebarWidth] = useState(248);
+  const [sidebarWidth, setSidebarWidth] = useState(200);
   const [resizingSidebar, setResizingSidebar] = useState(false);
   const [modelListStatus, setModelListStatus] = useState("未同步");
   const layoutRef = useRef(null);
@@ -709,6 +709,7 @@ function App() {
           className={cn(
             "relative grid min-h-0 flex-1 gap-3 pb-3 pr-3 transition-[grid-template-columns]",
             resizingSidebar && "is-resizing",
+            !sidebarVisible && "sidebar-hidden"
           )}
           style={{ gridTemplateColumns: sidebarVisible ? `${sidebarWidth}px minmax(0, 1fr)` : "0 minmax(0, 1fr)" }}
         >
@@ -731,6 +732,7 @@ function App() {
             className={cn(
               "content-surface relative flex min-h-0 flex-col overflow-hidden rounded-[16px] border border-border/80 bg-main/72 shadow-[0_22px_70px_rgba(0,0,0,0.32)] backdrop-blur-2xl",
               activeView === "settings" && "settings-content-surface",
+              !sidebarVisible && "sidebar-hidden"
             )}
           >
             {activeView === "settings" ? (
@@ -835,19 +837,19 @@ function Sidebar({
 
   return (
     <aside className="glass-sidebar flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
-      <div className="drag-region flex h-14 items-center px-6 text-sm font-semibold text-muted-foreground">NaviStar</div>
+      <div className="drag-region flex h-14 items-center px-4 text-sm font-semibold text-muted-foreground">NaviStar</div>
 
-      <nav className="sidebar-primary-actions flex flex-col gap-1 px-6" aria-label="主操作">
+      <nav className="sidebar-primary-actions flex flex-col gap-1 px-4" aria-label="主操作">
         <SidebarCommandButton icon={PencilLine} label="新对话" onClick={onNewThread} />
         <SidebarCommandButton icon={Search} label="搜索" onClick={onOpenSearch} />
       </nav>
 
-      <div className="mt-6 min-h-0 flex-1 px-5">
+      <div className="mt-6 min-h-0 flex-1 px-4">
         <div className="mb-2 px-2 text-xs font-medium text-muted-foreground">对话</div>
         <ConversationList conversations={conversations} onDeleteThread={onDeleteThread} onOpenThread={onOpenThread} />
       </div>
 
-      <div className="mt-auto px-5 pb-4">
+      <div className="mt-auto px-4 pb-4">
         <SidebarCommandButton active={activeView === "settings"} icon={Settings} label="设置" onClick={() => onOpenSettings("mcp")} />
       </div>
     </aside>
@@ -864,7 +866,7 @@ function ConversationList({ conversations, onDeleteThread, onOpenThread }) {
       {conversations.map((item) => (
         <button
           key={item.thread_id}
-          className="group flex h-10 items-center gap-2 rounded-lg px-3 text-left text-sm text-muted-foreground transition duration-200 hover:-translate-y-px hover:bg-accent hover:text-foreground"
+          className="group flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-left text-sm text-muted-foreground transition duration-200 hover:-translate-y-px hover:bg-accent hover:text-foreground"
           onClick={() => onOpenThread(item.thread_id)}
           type="button"
         >
@@ -932,7 +934,7 @@ function SidebarCommandButton({ active, icon: Icon, label, onClick }) {
   return (
     <button
       className={cn(
-        "sidebar-command-button flex h-9 w-full items-center gap-3 rounded-md px-2 text-sm font-medium transition duration-200",
+        "sidebar-command-button flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium transition duration-200",
         active && "is-active",
       )}
       onClick={onClick}
@@ -1061,15 +1063,17 @@ function EmptyConversation(props) {
       <div className="mb-8 text-center">
         <h2 className="text-3xl font-semibold">开始新对话</h2>
       </div>
-      <ChatBox className="w-full max-w-[720px]" {...props} />
+      <div className="w-full max-w-[720px] flex flex-col gap-3.5 items-center">
+        <ChatBox className="w-full" {...props} />
+      </div>
     </div>
   );
 }
 
 function ComposerDock(props) {
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-8 px-8">
-      <div className="pointer-events-auto mx-auto w-full max-w-[720px]">
+    <div className="pointer-events-none absolute inset-x-0 bottom-6 px-8">
+      <div className="pointer-events-auto mx-auto w-full max-w-[720px] flex flex-col gap-3.5 items-center">
         <ChatBox {...props} compact />
       </div>
     </div>
@@ -1123,11 +1127,11 @@ function ChatBox({
             supplier={settings.supplier}
           />
           <button
-            className="grid size-9 place-items-center rounded-full bg-primary text-primary-foreground transition duration-200 hover:scale-105 hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
+            className="grid size-8 place-items-center rounded-full bg-primary text-primary-foreground transition duration-200 hover:scale-105 hover:opacity-90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
             disabled={!input.trim() || streaming}
             onClick={() => onSubmit()}
           >
-            {streaming ? <Loader2 className="animate-spin" /> : <ArrowUp />}
+            {streaming ? <Loader2 className="animate-spin" /> : <ArrowUp className="size-4" />}
           </button>
         </div>
       </div>
@@ -1225,11 +1229,11 @@ function ModelReasoningMenu({ modelCatalog, modelValue, onModelChange, onReasoni
 
   return (
     <div ref={rootRef} className="relative">
-      <div className="model-picker flex h-9 items-center gap-1.5 text-xs">
-        <span className="model-provider-pill max-w-24 truncate rounded-lg bg-muted px-2.5 py-2 text-xs text-foreground">{supplierLabel}</span>
+      <div className="model-picker flex h-8 items-center gap-1.5 text-xs">
+        <span className="model-provider-pill flex h-8 items-center max-w-24 truncate rounded-lg bg-muted px-2.5 text-xs text-foreground">{supplierLabel}</span>
         <button
           className={cn(
-            "model-model-pill flex h-9 items-center gap-1 rounded-full px-3 text-xs transition hover:bg-muted",
+            "model-model-pill flex h-8 items-center gap-1 rounded-full px-3 text-xs transition hover:bg-muted",
             open && "bg-muted",
           )}
           type="button"
