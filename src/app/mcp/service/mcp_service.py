@@ -112,10 +112,14 @@ def normalize_mcp_server(name: str, server: dict[str, Any]) -> dict[str, Any]:
 def normalize_mcp_server_config(servers: dict[str, Any]) -> dict[str, dict[str, Any]]:
     if not isinstance(servers, dict):
         raise MCPConfigError("mcpServers must be an object")
-    return {
-        _clean_name(name): normalize_mcp_server(_clean_name(name), server)
-        for name, server in servers.items()
-    }
+
+    normalized: dict[str, dict[str, Any]] = {}
+    for raw_name, server in servers.items():
+        name = _clean_name(raw_name)
+        if name in normalized:
+            raise MCPConfigError(f"duplicate MCP server name: {name}")
+        normalized[name] = normalize_mcp_server(name, server)
+    return normalized
 
 
 def _payload_name(payload: dict[str, Any], fallback: str | None = None) -> str:
@@ -132,7 +136,10 @@ def get_normalized_mcp_servers() -> dict[str, dict[str, Any]]:
 
 
 def get_mcp_servers() -> Result:
-    return Result(data={MCP_SERVERS_KEY: get_normalized_mcp_servers()}).success()
+    try:
+        return Result(data={MCP_SERVERS_KEY: get_normalized_mcp_servers()}).success()
+    except Exception as exc:
+        return _result_failure(exc)
 
 
 def add_mcp_server(payload: dict[str, Any]) -> Result:

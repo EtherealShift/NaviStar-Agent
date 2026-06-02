@@ -168,6 +168,34 @@ class MCPConfigServiceTest(unittest.TestCase):
         self.assertTrue(remote["enabled"])
         self.assertNotIn("type", remote)
 
+    def test_get_mcp_servers_returns_failure_for_malformed_saved_config(self):
+        self.write_config(
+            {
+                "model": {"temperature": 0.6},
+                "mcpServers": {
+                    "broken": {
+                        "transport": "http",
+                    },
+                },
+            }
+        )
+
+        result = mcp_service.get_mcp_servers()
+
+        self.assertEqual(result.code, 400)
+        self.assertIn("broken: http transport requires url", result.msg)
+
+    def test_normalize_rejects_duplicate_cleaned_names(self):
+        with self.assertRaises(mcp_service.MCPConfigError) as context:
+            mcp_service.normalize_mcp_server_config(
+                {
+                    "foo": {"command": "npx"},
+                    " foo ": {"command": "uvx"},
+                }
+            )
+
+        self.assertIn("duplicate MCP server name: foo", str(context.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
