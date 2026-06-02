@@ -144,6 +144,30 @@ class MCPConfigServiceTest(unittest.TestCase):
         self.assertEqual(result.code, 400)
         self.assertEqual(self.read_config()["mcpServers"], {})
 
+    def test_getters_normalize_loaded_alias_configs(self):
+        self.write_config(
+            {
+                "model": {"temperature": 0.6},
+                "mcpServers": {
+                    "remote": {
+                        "type": "streamable_http",
+                        "url": "https://example.com/mcp",
+                    },
+                },
+            }
+        )
+
+        servers = mcp_service.get_normalized_mcp_servers()
+        result = mcp_service.get_mcp_servers()
+
+        self.assertEqual(result.code, 200)
+        self.assertEqual(result.data["mcpServers"], servers)
+        remote = servers["remote"]
+        self.assertEqual(remote.get("transport"), "http")
+        self.assertEqual(remote.get("headers"), {})
+        self.assertTrue(remote["enabled"])
+        self.assertNotIn("type", remote)
+
 
 if __name__ == "__main__":
     unittest.main()

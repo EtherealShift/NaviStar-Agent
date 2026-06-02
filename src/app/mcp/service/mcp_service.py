@@ -128,7 +128,7 @@ def _result_failure(exc: Exception) -> Result:
 
 def get_normalized_mcp_servers() -> dict[str, dict[str, Any]]:
     config = _read_config()
-    return dict(config.get(MCP_SERVERS_KEY, {}))
+    return normalize_mcp_server_config(config.get(MCP_SERVERS_KEY, {}))
 
 
 def get_mcp_servers() -> Result:
