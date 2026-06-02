@@ -26,10 +26,16 @@ def _read_config() -> dict[str, Any]:
 
     if not isinstance(data, dict):
         data = {}
-    data.setdefault(MCP_SERVERS_KEY, {})
-    if not isinstance(data[MCP_SERVERS_KEY], dict):
+    if MCP_SERVERS_KEY not in data:
         data[MCP_SERVERS_KEY] = {}
     return data
+
+
+def _server_map(config: dict[str, Any]) -> dict[str, Any]:
+    servers = config.setdefault(MCP_SERVERS_KEY, {})
+    if not isinstance(servers, dict):
+        raise MCPConfigError("mcpServers must be an object")
+    return servers
 
 
 def _write_config(config: dict[str, Any]) -> None:
@@ -132,7 +138,7 @@ def _result_failure(exc: Exception) -> Result:
 
 def get_normalized_mcp_servers() -> dict[str, dict[str, Any]]:
     config = _read_config()
-    return normalize_mcp_server_config(config.get(MCP_SERVERS_KEY, {}))
+    return normalize_mcp_server_config(_server_map(config))
 
 
 def get_mcp_servers() -> Result:
@@ -146,7 +152,7 @@ def add_mcp_server(payload: dict[str, Any]) -> Result:
     try:
         name = _payload_name(payload)
         config = _read_config()
-        servers = config.setdefault(MCP_SERVERS_KEY, {})
+        servers = _server_map(config)
         if name in servers:
             raise MCPConfigError(f"MCP server already exists: {name}")
         servers[name] = normalize_mcp_server(name, payload)
@@ -161,7 +167,7 @@ def update_mcp_server(name: str, payload: dict[str, Any]) -> Result:
         current_name = _clean_name(name)
         next_name = _payload_name(payload, current_name)
         config = _read_config()
-        servers = config.setdefault(MCP_SERVERS_KEY, {})
+        servers = _server_map(config)
         if current_name not in servers:
             raise MCPConfigError(f"MCP server not found: {current_name}")
         if next_name != current_name and next_name in servers:
@@ -180,7 +186,7 @@ def delete_mcp_server(name: str) -> Result:
     try:
         server_name = _clean_name(name)
         config = _read_config()
-        servers = config.setdefault(MCP_SERVERS_KEY, {})
+        servers = _server_map(config)
         if server_name not in servers:
             raise MCPConfigError(f"MCP server not found: {server_name}")
         del servers[server_name]
@@ -194,7 +200,7 @@ def set_mcp_server_enabled(name: str, enabled: bool) -> Result:
     try:
         server_name = _clean_name(name)
         config = _read_config()
-        servers = config.setdefault(MCP_SERVERS_KEY, {})
+        servers = _server_map(config)
         if server_name not in servers:
             raise MCPConfigError(f"MCP server not found: {server_name}")
         servers[server_name]["enabled"] = bool(enabled)
@@ -209,7 +215,7 @@ def import_mcp_servers(payload: dict[str, Any]) -> Result:
         raw_servers = payload.get(MCP_SERVERS_KEY, payload)
         normalized = normalize_mcp_server_config(raw_servers)
         config = _read_config()
-        servers = config.setdefault(MCP_SERVERS_KEY, {})
+        servers = _server_map(config)
         servers.update(normalized)
         _write_config(config)
         return Result(data={MCP_SERVERS_KEY: servers}).success()

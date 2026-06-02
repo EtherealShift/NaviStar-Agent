@@ -185,6 +185,14 @@ class MCPConfigServiceTest(unittest.TestCase):
         self.assertEqual(result.code, 400)
         self.assertIn("broken: http transport requires url", result.msg)
 
+    def test_get_mcp_servers_returns_failure_for_non_object_server_map(self):
+        self.write_config({"model": {"temperature": 0.6}, "mcpServers": []})
+
+        result = mcp_service.get_mcp_servers()
+
+        self.assertEqual(result.code, 400)
+        self.assertIn("mcpServers", result.msg)
+
     def test_normalize_rejects_duplicate_cleaned_names(self):
         with self.assertRaises(mcp_service.MCPConfigError) as context:
             mcp_service.normalize_mcp_server_config(
