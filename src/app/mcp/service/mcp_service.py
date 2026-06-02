@@ -1,69 +1,228 @@
-import json
+from pathlib import Path
+from typing import Any
 
-from langchain_mcp_adapters.client import MultiServerMCPClient
-from loguru import logger
+import yaml
 
-from common.config.constants import MCP_SERVER_PATH
+from common.config.constants import CONFIG_YAML_PATH as DEFAULT_CONFIG_YAML_PATH
+from common.models.result import Result
 
-TRANSPORT_ALIASES = {
-    "command": "stdio",
-    "local": "stdio",
-    "stdio": "stdio",
-    "http": "http",
-    "streamable_http": "http",
-    "streamablehttp": "http",
-    "sse": "sse",
-    "server_sent_events": "sse",
-    "websocket": "websocket",
-    "ws": "websocket",
-}
+CONFIG_YAML_PATH = DEFAULT_CONFIG_YAML_PATH
+MCP_SERVERS_KEY = "mcpServers"
+VALID_TRANSPORTS = {"stdio", "http", "sse"}
+REMOTE_TRANSPORTS = {"http", "sse"}
 
 
-def normalize_mcp_server_config(mcp_servers: dict) -> dict:
-    """
-    兼容 Claude/Codex/ModelScope 常见 MCP 配置。
-    langchain-mcp-adapters 要求 transport 字段。
-    """
-    normalized = {}
-    for name, config in mcp_servers.items():
-        if not isinstance(config, dict):
-            raise ValueError(f"MCP server config must be object: {name}")
-        if config.get("enabled") is False:
-            continue
+class MCPConfigError(ValueError):
+    """Raised when an MCP server config cannot be normalized."""
 
-        next_config = dict(config)
-        kind = next_config.get("transport") or next_config.get("type")
-        if not kind and "command" in next_config:
-            kind = "stdio"
 
-        transport = TRANSPORT_ALIASES.get(str(kind or "").strip().lower().replace("-", "_"))
-        if not transport:
-            raise ValueError(f"Unsupported MCP transport for {name}: {kind}")
+def _read_config() -> dict[str, Any]:
+    path = Path(CONFIG_YAML_PATH)
+    if not path.exists():
+        return {MCP_SERVERS_KEY: {}}
 
-        for field in ("type", "sourceType", "enabled", "status", "tools", "origin", "description", "id", "name"):
-            next_config.pop(field, None)
-        next_config["transport"] = transport
-        normalized[name] = next_config
+    with path.open("r", encoding="utf-8") as file:
+        data = yaml.safe_load(file) or {}
 
+    if not isinstance(data, dict):
+        data = {}
+    data.setdefault(MCP_SERVERS_KEY, {})
+    if not isinstance(data[MCP_SERVERS_KEY], dict):
+        data[MCP_SERVERS_KEY] = {}
+    return data
+
+
+def _write_config(config: dict[str, Any]) -> None:
+    path = Path(CONFIG_YAML_PATH)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as file:
+        yaml.safe_dump(config, file, allow_unicode=True, sort_keys=False)
+
+
+def _as_mapping(value: Any, field_name: str) -> dict[str, Any]:
+    if value in (None, ""):
+        return {}
+    if isinstance(value, dict):
+        return dict(value)
+    raise MCPConfigError(f"{field_name} must be an object")
+
+
+def _as_args(value: Any) -> list[str]:
+    if value in (None, ""):
+        return []
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    raise MCPConfigError("args must be an array")
+
+
+def _clean_name(value: Any) -> str:
+    name = str(value or "").strip()
+    if not name:
+        raise MCPConfigError("MCP server name is required")
+    return name
+
+
+def _normalize_transport(server: dict[str, Any]) -> str:
+    raw_transport = server.get("transport") or server.get("type")
+    if not raw_transport:
+        if server.get("command"):
+            raw_transport = "stdio"
+        elif server.get("url"):
+            raw_transport = "http"
+
+    transport = str(raw_transport or "").strip().lower().replace("-", "_")
+    if transport == "streamable_http":
+        transport = "http"
+    if transport not in VALID_TRANSPORTS:
+        raise MCPConfigError(f"unsupported MCP transport: {raw_transport}")
+    return transport
+
+
+def normalize_mcp_server(name: str, server: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(server, dict):
+        raise MCPConfigError("MCP server config must be an object")
+
+    transport = _normalize_transport(server)
+    normalized: dict[str, Any] = {
+        "enabled": bool(server.get("enabled", True)),
+        "transport": transport,
+    }
+
+    description = str(server.get("description") or "").strip()
+    if description:
+        normalized["description"] = description
+
+    if transport == "stdio":
+        command = str(server.get("command") or "").strip()
+        if not command:
+            raise MCPConfigError(f"{name}: stdio transport requires command")
+        normalized["command"] = command
+        normalized["args"] = _as_args(server.get("args"))
+        normalized["env"] = _as_mapping(server.get("env"), "env")
+        return normalized
+
+    url = str(server.get("url") or "").strip()
+    if not url:
+        raise MCPConfigError(f"{name}: {transport} transport requires url")
+    normalized["url"] = url
+    normalized["headers"] = _as_mapping(server.get("headers"), "headers")
     return normalized
 
 
-async def get_mcp_client():
-    """
-    mcp服务
-    """
+def normalize_mcp_server_config(servers: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    if not isinstance(servers, dict):
+        raise MCPConfigError("mcpServers must be an object")
+    return {
+        _clean_name(name): normalize_mcp_server(_clean_name(name), server)
+        for name, server in servers.items()
+    }
 
-    with open(MCP_SERVER_PATH, "r", encoding="utf-8") as f:
-        json_data = json.load(f)
 
-    # 读取mcp服务器配置
-    mcp_server = normalize_mcp_server_config(json_data["mcpServers"])
+def _payload_name(payload: dict[str, Any], fallback: str | None = None) -> str:
+    return _clean_name(payload.get("name") or payload.get("id") or payload.get("key") or fallback)
 
-    logger.info(f"mcp server: {mcp_server}")
 
-    # 创建mcp客户端
-    client = MultiServerMCPClient(
-        mcp_server,
-    )
+def _result_failure(exc: Exception) -> Result:
+    return Result(msg=str(exc)).failure()
 
-    return await client.get_tools()
+
+def get_normalized_mcp_servers() -> dict[str, dict[str, Any]]:
+    config = _read_config()
+    return dict(config.get(MCP_SERVERS_KEY, {}))
+
+
+def get_mcp_servers() -> Result:
+    return Result(data={MCP_SERVERS_KEY: get_normalized_mcp_servers()}).success()
+
+
+def add_mcp_server(payload: dict[str, Any]) -> Result:
+    try:
+        name = _payload_name(payload)
+        config = _read_config()
+        servers = config.setdefault(MCP_SERVERS_KEY, {})
+        if name in servers:
+            raise MCPConfigError(f"MCP server already exists: {name}")
+        servers[name] = normalize_mcp_server(name, payload)
+        _write_config(config)
+        return Result(data={MCP_SERVERS_KEY: servers}).success()
+    except Exception as exc:
+        return _result_failure(exc)
+
+
+def update_mcp_server(name: str, payload: dict[str, Any]) -> Result:
+    try:
+        current_name = _clean_name(name)
+        next_name = _payload_name(payload, current_name)
+        config = _read_config()
+        servers = config.setdefault(MCP_SERVERS_KEY, {})
+        if current_name not in servers:
+            raise MCPConfigError(f"MCP server not found: {current_name}")
+        if next_name != current_name and next_name in servers:
+            raise MCPConfigError(f"MCP server already exists: {next_name}")
+
+        servers[next_name] = normalize_mcp_server(next_name, payload)
+        if next_name != current_name:
+            del servers[current_name]
+        _write_config(config)
+        return Result(data={MCP_SERVERS_KEY: servers}).success()
+    except Exception as exc:
+        return _result_failure(exc)
+
+
+def delete_mcp_server(name: str) -> Result:
+    try:
+        server_name = _clean_name(name)
+        config = _read_config()
+        servers = config.setdefault(MCP_SERVERS_KEY, {})
+        if server_name not in servers:
+            raise MCPConfigError(f"MCP server not found: {server_name}")
+        del servers[server_name]
+        _write_config(config)
+        return Result(data={MCP_SERVERS_KEY: servers}).success()
+    except Exception as exc:
+        return _result_failure(exc)
+
+
+def set_mcp_server_enabled(name: str, enabled: bool) -> Result:
+    try:
+        server_name = _clean_name(name)
+        config = _read_config()
+        servers = config.setdefault(MCP_SERVERS_KEY, {})
+        if server_name not in servers:
+            raise MCPConfigError(f"MCP server not found: {server_name}")
+        servers[server_name]["enabled"] = bool(enabled)
+        _write_config(config)
+        return Result(data={MCP_SERVERS_KEY: servers}).success()
+    except Exception as exc:
+        return _result_failure(exc)
+
+
+def import_mcp_servers(payload: dict[str, Any]) -> Result:
+    try:
+        raw_servers = payload.get(MCP_SERVERS_KEY, payload)
+        normalized = normalize_mcp_server_config(raw_servers)
+        config = _read_config()
+        servers = config.setdefault(MCP_SERVERS_KEY, {})
+        servers.update(normalized)
+        _write_config(config)
+        return Result(data={MCP_SERVERS_KEY: servers}).success()
+    except Exception as exc:
+        return _result_failure(exc)
+
+
+def build_adapter_server_config(server: dict[str, Any]) -> dict[str, Any]:
+    transport = server.get("transport")
+    if transport == "stdio":
+        return {
+            "transport": "stdio",
+            "command": server["command"],
+            "args": server.get("args", []),
+            "env": server.get("env", {}),
+        }
+    if transport in REMOTE_TRANSPORTS:
+        return {
+            "transport": transport,
+            "url": server["url"],
+            "headers": server.get("headers", {}),
+        }
+    raise MCPConfigError(f"unsupported MCP transport: {transport}")
