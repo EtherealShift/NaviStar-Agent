@@ -40,7 +40,6 @@ import {
   X,
 } from "lucide-react";
 import {
-  createMcpServer,
   deleteConversation,
   deleteMcpServer,
   fetchConversations,
@@ -48,10 +47,10 @@ import {
   fetchMcpServers,
   fetchModelList,
   fetchSettings,
+  importMcpServers,
   saveModelKey,
   saveSettings,
   streamChatMessage,
-  testMcpServer,
   toggleMcpServer,
   updateMcpServer,
 } from "@/api/navistarApi";
@@ -93,7 +92,6 @@ const mcpTransports = [
   { value: "http", label: "Streamable HTTP", hint: "http" },
   { value: "stdio", label: "stdio", hint: "本地命令" },
   { value: "sse", label: "SSE", hint: "旧传输" },
-  { value: "websocket", label: "WebSocket", hint: "ws" },
 ];
 
 const fallbackMcpServers = [
@@ -123,6 +121,19 @@ const emptyMcpDraft = {
   enabled: true,
   description: "",
 };
+
+const manualMcpConfigExample = `// 示例:
+// {
+//   "mcpServers": {
+//     "example-server": {
+//       "command": "npx",
+//       "args": [
+//         "-y",
+//         "mcp-server-example"
+//       ]
+//     }
+//   }
+// }`;
 
 function formatModelLabel(model) {
   return (model || "")
@@ -227,8 +238,6 @@ function normalizeMcpTransport(value, fallback = "http") {
     streamablehttp: "http",
     sse: "sse",
     server_sent_events: "sse",
-    websocket: "websocket",
-    ws: "websocket",
   };
   return mapping[kind] || fallback;
 }
@@ -258,9 +267,37 @@ function stringifyKeyValueBlock(value) {
     .join("\n");
 }
 
+function stripJsonComments(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s*\/\/.*$/, ""))
+    .join("\n")
+    .trim();
+}
+
+function parseManualMcpConfig(value) {
+  const clean = stripJsonComments(value);
+  if (!clean) throw new Error("请粘贴 MCP Servers 配置 JSON");
+  const parsed = JSON.parse(clean);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("配置必须是 JSON 对象");
+  }
+  const config = parsed.mcpServers ? parsed : { mcpServers: parsed };
+  if (!config.mcpServers || typeof config.mcpServers !== "object" || Array.isArray(config.mcpServers)) {
+    throw new Error("配置中需要 mcpServers 对象");
+  }
+  if (!Object.keys(config.mcpServers).length) throw new Error("至少需要一个 MCP 服务");
+  return config;
+}
+
 function normalizeMcpServer(server = {}, index = 0) {
   const rawName = server.name || server.id || server.key || `mcp-server-${index + 1}`;
   const transport = normalizeMcpTransport(server.transport || server.type || (server.command ? "stdio" : "http"));
+  const runtimeStatus =
+    server.status && typeof server.status === "object"
+      ? server.status
+      : { state: server.status || "unknown", message: "" };
+
   return {
     ...emptyMcpDraft,
     ...server,
@@ -272,8 +309,30 @@ function normalizeMcpServer(server = {}, index = 0) {
     env: typeof server.env === "string" ? server.env : stringifyKeyValueBlock(server.env),
     headers: typeof server.headers === "string" ? server.headers : stringifyKeyValueBlock(server.headers),
     enabled: server.enabled ?? true,
-    status: server.status || "unknown",
+    status: runtimeStatus,
+    toolCount: runtimeStatus.tool_count ?? runtimeStatus.toolCount ?? 0,
+    statusMessage: runtimeStatus.message || "",
   };
+}
+
+function getMcpStatusState(server) {
+  return server.status?.state || "unknown";
+}
+
+function formatMcpStatus(server) {
+  const state = getMcpStatusState(server);
+  if (!server.enabled || state === "disabled") return "已禁用";
+  if (state === "connected") return `已连接 · ${server.toolCount || 0} 个工具`;
+  if (state === "error") return `连接失败：${server.statusMessage || "请检查配置"}`;
+  return "状态未知";
+}
+
+function getMcpStatusClass(server) {
+  const state = getMcpStatusState(server);
+  if (!server.enabled || state === "disabled") return "text-[#777d7a]";
+  if (state === "connected") return "text-[#2f6f45]";
+  if (state === "error") return "text-[#b1423d]";
+  return "text-[#777d7a]";
 }
 
 function normalizeMcpServerList(value) {
@@ -1467,14 +1526,20 @@ function SettingsPlaceholder({ section }) {
 
 function McpSettingsPage() {
   const [servers, setServers] = useState(fallbackMcpServers.map(normalizeMcpServer));
-  const [selectedId, setSelectedId] = useState(fallbackMcpServers[0]?.id || "");
   const [draft, setDraft] = useState(normalizeMcpServer(fallbackMcpServers[0]));
   const [mode, setMode] = useState("edit");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [manualConfigText, setManualConfigText] = useState(manualMcpConfigExample);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [apiStatus, setApiStatus] = useState("同步中");
-  const selectedServer = servers.find((server) => server.id === selectedId);
-  const isNewDraft = mode === "new";
+
+  async function refreshServers(nextStatus = "已同步") {
+    const data = await fetchMcpServers();
+    const items = normalizeMcpServerList(data);
+    setServers(items.length ? items : []);
+    setApiStatus(items.length ? nextStatus : "暂无服务器");
+  }
 
   useEffect(() => {
     let alive = true;
@@ -1483,15 +1548,12 @@ function McpSettingsPage() {
       .then((data) => {
         if (!alive) return;
         const items = normalizeMcpServerList(data);
-        const nextServers = items.length ? items : fallbackMcpServers.map(normalizeMcpServer);
-        setServers(nextServers);
-        setSelectedId(nextServers[0]?.id || "");
+        setServers(items.length ? items : []);
         setApiStatus(items.length ? "已同步" : "暂无服务器");
       })
       .catch((error) => {
         if (!alive) return;
         setServers(fallbackMcpServers.map(normalizeMcpServer));
-        setSelectedId(fallbackMcpServers[0]?.id || "");
         setApiStatus(`接口待实现：${error.message}`);
       })
       .finally(() => {
@@ -1502,22 +1564,16 @@ function McpSettingsPage() {
     };
   }, []);
 
-  useEffect(() => {
-    if (isNewDraft) return;
-    const nextDraft = normalizeMcpServer(selectedServer || servers[0] || emptyMcpDraft);
-    setDraft(nextDraft);
-  }, [selectedId, selectedServer, servers, isNewDraft]);
-
   function startNewServer() {
-    const nextDraft = {
-      ...emptyMcpDraft,
-      id: "",
-      name: "new-mcp-server",
-      status: "draft",
-    };
-    setMode("new");
-    setSelectedId("");
-    setDraft(nextDraft);
+    setMode("manual");
+    setManualConfigText(manualMcpConfigExample);
+    setIsModalOpen(true);
+  }
+
+  function startEditServer(server) {
+    setMode("edit");
+    setDraft(normalizeMcpServer(server));
+    setIsModalOpen(true);
   }
 
   async function saveDraft() {
@@ -1544,182 +1600,292 @@ function McpSettingsPage() {
     });
 
     setSaving(true);
-    setServers((items) => {
-      const exists = items.some((item) => item.id === nextServer.id);
-      return exists ? items.map((item) => (item.id === nextServer.id ? nextServer : item)) : [...items, nextServer];
-    });
-    setSelectedId(nextServer.id);
-    setMode("edit");
-
     try {
-      if (isNewDraft) await createMcpServer(payload);
-      else await updateMcpServer(nextServer.id, payload);
-      setApiStatus("已保存");
+      await updateMcpServer(nextServer.id, payload);
+      await refreshServers("已保存");
+      setIsModalOpen(false);
     } catch (error) {
-      setApiStatus(`前端草稿已保存，后端待实现：${error.message}`);
+      setApiStatus(`保存失败：${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveManualConfig() {
+    let config;
+    try {
+      config = parseManualMcpConfig(manualConfigText);
+    } catch (error) {
+      setApiStatus(`解析失败：${error.message}`);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const data = await importMcpServers(config);
+      const items = normalizeMcpServerList(data);
+      setServers(items.length ? items : []);
+      setApiStatus("已导入");
+      setIsModalOpen(false);
+    } catch (error) {
+      setApiStatus(`导入失败：${error.message}`);
     } finally {
       setSaving(false);
     }
   }
 
   async function removeServer(serverId) {
-    const nextServers = servers.filter((server) => server.id !== serverId);
-    setServers(nextServers);
-    setSelectedId(nextServers[0]?.id || "");
-    setMode(nextServers.length ? "edit" : "new");
-    if (!nextServers.length) startNewServer();
-
     try {
       await deleteMcpServer(serverId);
-      setApiStatus("已删除");
+      await refreshServers("已删除");
     } catch (error) {
-      setApiStatus(`前端草稿已删除，后端待实现：${error.message}`);
+      setApiStatus(`删除失败：${error.message}`);
     }
   }
 
   async function switchServer(server, enabled) {
     setServers((items) => items.map((item) => (item.id === server.id ? { ...item, enabled } : item)));
-    if (server.id === draft.id) setDraft((value) => ({ ...value, enabled }));
 
     try {
       await toggleMcpServer(server.id, enabled);
-      setApiStatus(enabled ? "已启用" : "已关闭");
+      await refreshServers(enabled ? "已启用" : "已关闭");
     } catch (error) {
-      setApiStatus(`前端状态已更新，后端待实现：${error.message}`);
+      setApiStatus(`状态更新失败：${error.message}`);
+      setServers((items) => items.map((item) => (item.id === server.id ? { ...item, enabled: !enabled } : item)));
     }
-  }
-
-  async function testDraft() {
-    setApiStatus("测试中");
-    try {
-      await testMcpServer(mcpDraftToPayload(draft));
-      setApiStatus("连接可用");
-    } catch (error) {
-      setApiStatus(`测试接口待实现：${error.message}`);
-    }
-  }
-
-  function copyPreview() {
-    navigator.clipboard?.writeText(mcpPreviewConfig(draft));
-    setApiStatus("配置已复制");
   }
 
   return (
     <div className="settings-page min-h-0 flex-1 overflow-y-auto text-[#1f2322]">
-      <div className="border-b border-[#e7e8e4] px-8 py-5 text-sm text-[#747a77]">
-        <span>MCP</span>
-        <span className="mx-2 text-[#bec3bf]">/</span>
-        <span>服务器</span>
+      <div className="border-b border-[#e7e8e4] py-3 text-xs text-[#747a77]">
+        <div className="mx-auto max-w-[680px] px-6">
+          <span>MCP</span>
+          <span className="mx-2 text-[#bec3bf]">/</span>
+          <span>服务器</span>
+        </div>
       </div>
 
-      <div className="mx-auto w-full max-w-[1080px] px-8 py-10">
-        <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="mx-auto w-full max-w-[680px] px-6 py-7">
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#eceeeb] pb-4">
           <div>
-            <h2 className="text-[28px] font-semibold leading-tight">MCP 服务器</h2>
-            <p className="mt-2 text-sm text-[#6f7472]">
-              连接外部工具和数据源。 <button className="text-[#1677ff] hover:underline">了解更多。</button>
+            <h2 className="text-[22px] font-semibold leading-tight">MCP 服务器</h2>
+            <p className="mt-1.5 text-xs text-[#6f7472]">
+              连接外部工具和数据源。 <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer" className="text-[#1677ff] hover:underline">了解更多。</a>
             </p>
           </div>
-          <button
-            className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#f0f1ef] px-4 text-sm font-medium text-[#1f2322] transition hover:bg-[#e5e7e4] active:scale-[0.98]"
-            onClick={startNewServer}
-            type="button"
-          >
-            <Plus />
-            添加服务器
-          </button>
         </div>
 
-        <div className="mt-12 grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
-          <section className="min-w-0">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h3 className="text-base font-semibold">服务器</h3>
+        <div className="mt-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-[#1f2322]">服务器</h3>
+            <div className="flex items-center gap-2">
               <StatusBadge loading={loading} status={apiStatus} />
-            </div>
-
-            <div className="overflow-hidden rounded-lg border border-[#e1e3df] bg-white">
-              {loading ? (
-                <McpSkeleton />
-              ) : servers.length ? (
-                servers.map((server) => (
-                  <McpServerRow
-                    active={server.id === selectedId}
-                    key={server.id}
-                    onRemove={removeServer}
-                    onSelect={(serverId) => {
-                      setMode("edit");
-                      setSelectedId(serverId);
-                    }}
-                    onToggle={switchServer}
-                    server={server}
-                  />
-                ))
-              ) : (
-                <div className="px-5 py-10 text-center text-sm text-[#777d7a]">暂无服务器</div>
-              )}
-            </div>
-
-            <BackendContractPanel />
-          </section>
-
-          <section className="min-w-0 rounded-lg border border-[#e1e3df] bg-white">
-            <div className="flex items-center justify-between border-b border-[#eceeeb] px-5 py-4">
-              <div>
-                <h3 className="text-base font-semibold">{isNewDraft ? "添加服务器" : "服务器配置"}</h3>
-                <p className="mt-1 text-xs text-[#777d7a]">{draft.transport === "stdio" ? "本地进程" : "远程连接"}</p>
-              </div>
               <button
-                className="grid size-8 place-items-center rounded-lg text-[#6f7472] transition hover:bg-[#f1f3f0] hover:text-[#1f2322]"
-                onClick={copyPreview}
-                title="复制 LangChain 配置"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#f0f1ef] px-3 text-xs font-medium text-[#1f2322] transition hover:bg-[#e5e7e4] active:scale-[0.98]"
+                onClick={startNewServer}
                 type="button"
               >
-                <Copy />
+                <Plus className="size-3.5" />
+                添加服务器
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {loading ? (
+              <McpSkeleton />
+            ) : servers.length ? (
+              servers.map((server) => (
+                <div
+                  key={server.id}
+                  className="flex min-h-[52px] items-center justify-between rounded-lg border border-[#e1e3df] bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition duration-200 hover:border-[#d4d8d2] hover:shadow-[0_8px_20px_rgba(15,23,42,0.06)]"
+                >
+                  <div className="min-w-0">
+                    <span className="block truncate text-sm font-semibold text-[#1f2322]">{server.name}</span>
+                    <span className={cn("mt-0.5 block truncate text-[11px]", getMcpStatusClass(server))} title={formatMcpStatus(server)}>
+                      {formatMcpStatus(server)}
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      className="grid size-7 place-items-center rounded-md text-[#777d7a] transition hover:bg-[#f1f3f0] hover:text-[#1f2322]"
+                      onClick={() => startEditServer(server)}
+                      title="配置"
+                      type="button"
+                    >
+                      <Settings className="size-4" />
+                    </button>
+                    <button
+                      className={cn(
+                        "relative h-5 w-9 rounded-full transition duration-200",
+                        server.enabled ? "bg-[#1677ff]" : "bg-[#d8dbd6]",
+                      )}
+                      onClick={() => switchServer(server, !server.enabled)}
+                      role="switch"
+                      aria-checked={server.enabled}
+                      title={server.enabled ? "关闭" : "启用"}
+                      type="button"
+                    >
+                      <span
+                        className={cn(
+                          "absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform duration-200",
+                          server.enabled && "translate-x-4",
+                        )}
+                      />
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-lg border border-[#e1e3df] bg-white px-4 py-8 text-center text-xs text-[#777d7a]">
+                暂无服务器
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {isModalOpen && (
+        mode === "manual" ? (
+          <ManualMcpConfigDialog
+            saving={saving}
+            value={manualConfigText}
+            onCancel={() => setIsModalOpen(false)}
+            onChange={setManualConfigText}
+            onConfirm={saveManualConfig}
+          />
+        ) : (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-[1px] animate-in fade-in duration-200">
+          <div className="z-50 flex max-h-[88vh] w-full max-w-[480px] flex-col overflow-y-auto rounded-xl border border-[#e1e3df] bg-white shadow-[0_18px_48px_rgba(15,23,42,0.18)] animate-in zoom-in-95 duration-200">
+
+            <div className="flex items-center justify-between border-b border-[#eceeeb] px-5 py-3">
+              <div>
+                <h3 className="text-base font-semibold text-[#1f2322]">
+                  配置 MCP 服务器
+                </h3>
+                <p className="mt-1 text-xs text-[#777d7a]">
+                  {draft.transport === "stdio" ? "本地进程 (stdio)" : "远程连接 (HTTP/SSE)"}
+                </p>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="grid size-7 place-items-center rounded-md text-[#6f7472] transition hover:bg-[#f1f3f0] hover:text-[#1f2322]"
+                type="button"
+              >
+                <X className="size-4" />
               </button>
             </div>
 
-            <McpServerForm draft={draft} onChange={setDraft} />
+            <div className="flex-1 overflow-y-auto">
+              <McpServerForm draft={draft} onChange={setDraft} modalMode={mode} />
+            </div>
 
-            <div className="border-t border-[#eceeeb] px-5 py-4">
-              <div className="mb-4 rounded-lg bg-[#f6f7f5] p-3">
-                <div className="mb-2 flex items-center justify-between text-xs font-medium text-[#6f7472]">
-                  <span>LangChain 配置预览</span>
-                  <span>{draft.sourceType || draft.transport}</span>
-                </div>
-                <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words text-xs leading-5 text-[#303433]">{mcpPreviewConfig(draft)}</pre>
+            <div className="flex items-center justify-between gap-2 rounded-b-xl border-t border-[#eceeeb] bg-[#fdfdfd] px-5 py-3">
+              <div>
+                {mode === "edit" && draft.id && (
+                  <button
+                    className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-[#b1423d] transition hover:bg-[#fff1ef] active:scale-[0.98]"
+                    onClick={() => {
+                      if (confirm(`确定要删除 MCP 服务器 "${draft.name}" 吗？`)) {
+                        removeServer(draft.id);
+                        setIsModalOpen(false);
+                      }
+                    }}
+                    type="button"
+                  >
+                    <Trash2 className="size-3.5" />
+                    删除服务器
+                  </button>
+                )}
               </div>
-
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2">
                 <button
-                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#1f2322] px-3 text-sm font-medium text-white transition hover:bg-[#343938] active:scale-[0.98] disabled:opacity-50"
+                  className="inline-flex h-8 items-center justify-center rounded-md border border-[#dfe2de] bg-white px-3 text-xs font-medium text-[#1f2322] transition hover:bg-[#f5f6f4] active:scale-[0.98]"
+                  onClick={() => setIsModalOpen(false)}
+                  type="button"
+                >
+                  取消
+                </button>
+                <button
+                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-[#1f2322] px-3 text-xs font-medium text-white transition hover:bg-[#343938] active:scale-[0.98] disabled:opacity-50"
                   disabled={saving}
                   onClick={saveDraft}
                   type="button"
                 >
-                  {saving ? <Loader2 className="animate-spin" /> : <Check />}
+                  {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
                   保存
                 </button>
-                <button
-                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dfe2de] bg-white px-3 text-sm font-medium text-[#1f2322] transition hover:bg-[#f5f6f4] active:scale-[0.98]"
-                  onClick={testDraft}
-                  type="button"
-                >
-                  <ShieldCheck />
-                  测试连接
-                </button>
-                {!isNewDraft && draft.id && (
-                  <button
-                    className="ml-auto inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-[#b1423d] transition hover:bg-[#fff1ef] active:scale-[0.98]"
-                    onClick={() => removeServer(draft.id)}
-                    type="button"
-                  >
-                    <Trash2 />
-                    删除
-                  </button>
-                )}
               </div>
             </div>
-          </section>
+
+          </div>
+        </div>
+        )
+      )}
+    </div>
+  );
+}
+
+function ManualMcpConfigDialog({ onCancel, onChange, onConfirm, saving, value }) {
+  const lineCount = Math.max(value.split(/\r?\n/).length, 13);
+  const lineNumbers = Array.from({ length: lineCount }, (_, index) => index + 1).join("\n");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1f2933]/28 p-4 backdrop-blur-[1px] animate-in fade-in duration-200">
+      <div className="w-full max-w-[720px] rounded-[14px] border border-[#e1e6ec] bg-white shadow-[0_18px_50px_rgba(15,23,42,0.18)] animate-in zoom-in-95 duration-200">
+        <div className="flex items-start justify-between gap-5 px-5 pb-2 pt-4">
+          <div>
+            <h3 className="text-[20px] font-semibold leading-tight tracking-normal text-[#111827]">手动配置</h3>
+            <p className="mt-3 text-[13px] leading-5 text-[#5f6873]">
+              请从 MCP Servers 的介绍页面复制配置 JSON（优先使用 NPX 或 UVX 配置），并粘贴到输入框中。
+            </p>
+          </div>
+          <button
+            aria-label="关闭"
+            className="grid size-8 shrink-0 place-items-center rounded-md text-[#20252b] transition hover:bg-[#f1f3f5]"
+            onClick={onCancel}
+            type="button"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <div className="px-5">
+          <div className="manual-config-editor h-[300px] overflow-hidden rounded-lg border border-[#d8dee7] bg-[#eef0f3] shadow-inner">
+            <pre aria-hidden="true" className="manual-config-lines">{lineNumbers}</pre>
+            <textarea
+              aria-label="MCP Servers 配置 JSON"
+              className="manual-config-textarea"
+              spellCheck={false}
+              value={value}
+              onChange={(event) => onChange(event.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#c89614]">
+            <CircleAlert className="size-3.5 fill-[#c89614] text-white" />
+            配置前请确认来源，甄别风险
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              className="inline-flex h-8 min-w-14 items-center justify-center rounded-md bg-[#e5e7eb] px-3 text-xs font-medium text-[#30343a] transition hover:bg-[#d9dde3] active:scale-[0.98]"
+              onClick={onCancel}
+              type="button"
+            >
+              取消
+            </button>
+            <button
+              className="inline-flex h-8 min-w-14 items-center justify-center gap-1.5 rounded-md bg-[#30343a] px-3 text-xs font-medium text-white transition hover:bg-[#1f2328] active:scale-[0.98] disabled:opacity-60"
+              disabled={saving}
+              onClick={onConfirm}
+              type="button"
+            >
+              {saving && <Loader2 className="size-3.5 animate-spin" />}
+              确认
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1745,82 +1911,21 @@ function StatusBadge({ loading, status }) {
 
 function McpSkeleton() {
   return (
-    <div className="divide-y divide-[#eceeeb]">
+    <div className="space-y-2">
       {[0, 1, 2].map((item) => (
-        <div className="flex h-[78px] items-center gap-4 px-5" key={item}>
-          <div className="size-9 animate-pulse rounded-lg bg-[#edf0ed]" />
-          <div className="min-w-0 flex-1">
-            <div className="h-3 w-40 animate-pulse rounded bg-[#edf0ed]" />
-            <div className="mt-3 h-2.5 w-64 animate-pulse rounded bg-[#f1f2ef]" />
+        <div className="flex h-[52px] animate-pulse items-center justify-between rounded-lg border border-[#e1e3df] bg-white px-4 py-3" key={item}>
+          <div className="h-3.5 w-28 rounded bg-[#edf0ed]" />
+          <div className="flex items-center gap-2">
+            <div className="size-7 rounded-md bg-[#edf0ed]" />
+            <div className="h-5 w-9 rounded-full bg-[#edf0ed]" />
           </div>
-          <div className="h-6 w-10 animate-pulse rounded-full bg-[#edf0ed]" />
         </div>
       ))}
     </div>
   );
 }
 
-function McpServerRow({ active, onRemove, onSelect, onToggle, server }) {
-  const remote = server.transport !== "stdio";
-  const statusLabel = server.enabled ? "已启用" : "已关闭";
-
-  return (
-    <div
-      className={cn(
-        "grid min-h-[78px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-[#eceeeb] px-5 py-3 last:border-b-0",
-        active && "bg-[#f7f9f6]",
-      )}
-    >
-      <button className="flex min-w-0 items-center gap-4 text-left" onClick={() => onSelect(server.id)} type="button">
-        <span className={cn("grid size-9 shrink-0 place-items-center rounded-lg", server.enabled ? "bg-[#e8f2eb] text-[#2d7042]" : "bg-[#f1f2ef] text-[#858a87]")}>
-          {remote ? <Link2 /> : <TerminalIcon />}
-        </span>
-        <span className="min-w-0">
-          <span className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-sm font-semibold text-[#1f2322]">{server.name}</span>
-            <span className="shrink-0 rounded-md bg-[#eef1ee] px-1.5 py-0.5 text-[11px] font-medium text-[#66706b]">{server.transport}</span>
-          </span>
-          <span className="mt-1 block truncate text-xs text-[#777d7a]">{remote ? server.url : `${server.command || "command"} ${server.args || ""}`}</span>
-        </span>
-      </button>
-
-      <div className="flex items-center gap-2">
-        <span className="hidden text-xs text-[#777d7a] sm:inline">{statusLabel}</span>
-        <button
-          className={cn(
-            "relative h-6 w-11 rounded-full border transition",
-            server.enabled ? "border-[#2f8b57] bg-[#2f8b57]" : "border-[#d8dbd6] bg-[#e9ebe8]",
-          )}
-          onClick={() => onToggle(server, !server.enabled)}
-          role="switch"
-          aria-checked={server.enabled}
-          title={server.enabled ? "关闭" : "启用"}
-          type="button"
-        >
-          <span className={cn("absolute top-0.5 size-5 rounded-full bg-white shadow-sm transition", server.enabled ? "left-5" : "left-0.5")} />
-        </button>
-        <button
-          className="grid size-8 place-items-center rounded-lg text-[#777d7a] transition hover:bg-[#f1f3f0] hover:text-[#1f2322]"
-          onClick={() => onSelect(server.id)}
-          title="配置"
-          type="button"
-        >
-          <Wrench />
-        </button>
-        <button
-          className="grid size-8 place-items-center rounded-lg text-[#b1423d] transition hover:bg-[#fff1ef]"
-          onClick={() => onRemove(server.id)}
-          title="删除"
-          type="button"
-        >
-          <Trash2 />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function McpServerForm({ draft, onChange }) {
+function McpServerForm({ draft, onChange, modalMode }) {
   function update(field, value) {
     const next = { ...draft, [field]: value };
     if (field === "transport") {
@@ -1831,18 +1936,27 @@ function McpServerForm({ draft, onChange }) {
     onChange(next);
   }
 
+  const isEdit = modalMode === "edit";
+
   return (
-    <div className="grid gap-4 px-5 py-5">
+    <div className="grid gap-3 px-5 py-4">
       <McpFormField label="名称">
-        <Input className="settings-input" value={draft.name} onChange={(event) => update("name", event.target.value)} placeholder="bing-cn-mcp-server" />
+        <Input
+          className="settings-input"
+          value={draft.name}
+          onChange={(event) => update("name", event.target.value)}
+          placeholder="bing-cn-mcp-server"
+          disabled={isEdit}
+          readOnly={isEdit}
+        />
       </McpFormField>
 
-      <McpFormField label="传输">
-        <div className="grid grid-cols-2 gap-2">
+      <McpFormField label="传输方式">
+        <div className="grid grid-cols-2 gap-1.5">
           {mcpTransports.map((transport) => (
             <button
               className={cn(
-                "min-h-12 rounded-lg border px-3 py-2 text-left transition active:scale-[0.98]",
+                "min-h-10 rounded-md border px-2.5 py-2 text-left transition active:scale-[0.98]",
                 draft.transport === transport.value
                   ? "border-[#1f2322] bg-[#1f2322] text-white"
                   : "border-[#dfe2de] bg-white text-[#1f2322] hover:bg-[#f5f6f4]",
@@ -1851,8 +1965,8 @@ function McpServerForm({ draft, onChange }) {
               onClick={() => update("transport", transport.value)}
               type="button"
             >
-              <span className="block text-sm font-medium">{transport.label}</span>
-              <span className={cn("mt-0.5 block text-xs", draft.transport === transport.value ? "text-white/70" : "text-[#777d7a]")}>{transport.hint}</span>
+              <span className="block text-xs font-medium">{transport.label}</span>
+              <span className={cn("mt-0.5 block text-[11px]", draft.transport === transport.value ? "text-white/70" : "text-[#777d7a]")}>{transport.hint}</span>
             </button>
           ))}
         </div>
@@ -1860,15 +1974,15 @@ function McpServerForm({ draft, onChange }) {
 
       {draft.transport === "stdio" ? (
         <>
-          <McpFormField label="Command">
+          <McpFormField label="Command (命令)">
             <Input className="settings-input" value={draft.command} onChange={(event) => update("command", event.target.value)} placeholder="uvx" />
           </McpFormField>
-          <McpFormField label="Args">
+          <McpFormField label="Args (参数)">
             <Input className="settings-input" value={draft.args} onChange={(event) => update("args", event.target.value)} placeholder="mcp-server-fetch" />
           </McpFormField>
-          <McpFormField label="Env">
+          <McpFormField label="Env (环境变量)">
             <textarea
-              className="settings-textarea min-h-24"
+              className="settings-textarea min-h-24 w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none transition placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
               value={draft.env}
               onChange={(event) => update("env", event.target.value)}
               placeholder={"API_KEY=...\nBASE_URL=..."}
@@ -1883,9 +1997,9 @@ function McpServerForm({ draft, onChange }) {
           <McpFormField label="源格式">
             <Input className="settings-input" value={draft.sourceType} onChange={(event) => update("sourceType", event.target.value)} placeholder="streamable_http" />
           </McpFormField>
-          <McpFormField label="Headers">
+          <McpFormField label="Headers (请求头)">
             <textarea
-              className="settings-textarea min-h-20"
+              className="settings-textarea min-h-20 w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none transition placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
               value={draft.headers}
               onChange={(event) => update("headers", event.target.value)}
               placeholder={"Authorization=Bearer ...\nX-Client=NaviStar"}
@@ -1910,34 +2024,7 @@ function McpFormField({ children, label }) {
   );
 }
 
-function BackendContractPanel() {
-  const contracts = [
-    ["GET", "/mcp/servers", "读取服务器"],
-    ["POST", "/mcp/servers", "新增服务器"],
-    ["PUT", "/mcp/servers/{id}", "更新服务器"],
-    ["DELETE", "/mcp/servers/{id}", "删除服务器"],
-    ["POST", "/mcp/servers/{id}/toggle", "启用关闭"],
-    ["POST", "/mcp/servers/test", "测试连接"],
-  ];
 
-  return (
-    <section className="mt-8 rounded-lg border border-[#e1e3df] bg-white">
-      <div className="flex items-center gap-2 border-b border-[#eceeeb] px-5 py-4">
-        <Database className="text-[#66706b]" />
-        <h3 className="text-sm font-semibold">后端接口</h3>
-      </div>
-      <div className="divide-y divide-[#f0f1ef]">
-        {contracts.map(([method, path, label]) => (
-          <div className="grid grid-cols-[72px_minmax(0,1fr)_88px] items-center gap-3 px-5 py-3 text-xs" key={`${method}-${path}`}>
-            <span className="rounded-md bg-[#f0f2ef] px-2 py-1 text-center font-semibold text-[#3d4441]">{method}</span>
-            <code className="truncate rounded bg-[#f7f8f6] px-2 py-1 font-mono text-[#4c5350]">{path}</code>
-            <span className="truncate text-right text-[#777d7a]">{label}</span>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
 
 function SettingField({ label, children }) {
   return (
