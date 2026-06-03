@@ -1,9 +1,20 @@
 import mimetypes
-from pathlib import Path
+import os
+from copy import deepcopy
 
 import yaml
 
-from common.config.constants import SUPPLIER_YAML_PATH
+from common.config.constants import CONFIG_YAML_PATH
+
+DEFAULT_CONFIG = {
+    "model": {
+        "model_name": "deepseek-v4-flash",
+        "reasoning_effort": "medium",
+        "supplier": "deepseek",
+        "temperature": 1.0,
+    },
+    "mcpServers": {},
+}
 
 _Images = ["png", "jpg", "jpeg", "gif", "bmp"]
 
@@ -33,17 +44,26 @@ def document_type(file_path: str) :
             return "unknown", None
 
 
+def load_config():
+    with open(CONFIG_YAML_PATH, "r", encoding="utf-8") as f:
+       return yaml.safe_load(f)
 
 
-def supplier_yaml_path():
-    with open(SUPPLIER_YAML_PATH, 'r', encoding='utf-8') as file:  # SUPPLIER_YAML_PATH is a constant from a module
-        data = yaml.safe_load(file)
-    return data
+def config_yaml_path():
+    """
+    读取 config.yaml，若文件不存在则先初始化默认配置。
+    """
+    init_config_yaml()
+    return load_config() or deepcopy(DEFAULT_CONFIG)
 
 
 
+def init_config_yaml():
+    """
+    初始化配置文件，若配置文件不存在则使用默认配置
+    """
+    if not os.path.exists(CONFIG_YAML_PATH):
+        # 配置config.yaml文件
+        with open(CONFIG_YAML_PATH, "w", encoding="utf-8") as file:
+            yaml.safe_dump(DEFAULT_CONFIG, file, allow_unicode=True, sort_keys=False)
 
-
-if __name__ == "__main__":
-    # print(document_type(r"D:\work\PythonProjects\NaviStar-Agent\CLAUDE.md"))
-    print(supplier_yaml_path())
