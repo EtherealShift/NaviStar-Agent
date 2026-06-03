@@ -45,6 +45,12 @@ def _write_config(config: dict[str, Any]) -> None:
         yaml.safe_dump(config, file, allow_unicode=True, sort_keys=False)
 
 
+def _normalize_and_store_servers(config: dict[str, Any], servers: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    normalized = normalize_mcp_server_config(servers)
+    config[MCP_SERVERS_KEY] = normalized
+    return normalized
+
+
 def _as_mapping(value: Any, field_name: str) -> dict[str, Any]:
     if value in (None, ""):
         return {}
@@ -156,6 +162,7 @@ def add_mcp_server(payload: dict[str, Any]) -> Result:
         if name in servers:
             raise MCPConfigError(f"MCP server already exists: {name}")
         servers[name] = normalize_mcp_server(name, payload)
+        servers = _normalize_and_store_servers(config, servers)
         _write_config(config)
         return Result(data={MCP_SERVERS_KEY: servers}).success()
     except Exception as exc:
@@ -176,6 +183,7 @@ def update_mcp_server(name: str, payload: dict[str, Any]) -> Result:
         servers[next_name] = normalize_mcp_server(next_name, payload)
         if next_name != current_name:
             del servers[current_name]
+        servers = _normalize_and_store_servers(config, servers)
         _write_config(config)
         return Result(data={MCP_SERVERS_KEY: servers}).success()
     except Exception as exc:
@@ -190,6 +198,7 @@ def delete_mcp_server(name: str) -> Result:
         if server_name not in servers:
             raise MCPConfigError(f"MCP server not found: {server_name}")
         del servers[server_name]
+        servers = _normalize_and_store_servers(config, servers)
         _write_config(config)
         return Result(data={MCP_SERVERS_KEY: servers}).success()
     except Exception as exc:
@@ -204,6 +213,7 @@ def set_mcp_server_enabled(name: str, enabled: bool) -> Result:
         if server_name not in servers:
             raise MCPConfigError(f"MCP server not found: {server_name}")
         servers[server_name]["enabled"] = bool(enabled)
+        servers = _normalize_and_store_servers(config, servers)
         _write_config(config)
         return Result(data={MCP_SERVERS_KEY: servers}).success()
     except Exception as exc:
@@ -217,6 +227,7 @@ def import_mcp_servers(payload: dict[str, Any]) -> Result:
         config = _read_config()
         servers = _server_map(config)
         servers.update(normalized)
+        servers = _normalize_and_store_servers(config, servers)
         _write_config(config)
         return Result(data={MCP_SERVERS_KEY: servers}).success()
     except Exception as exc:

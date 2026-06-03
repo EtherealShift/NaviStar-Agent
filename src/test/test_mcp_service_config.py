@@ -204,6 +204,34 @@ class MCPConfigServiceTest(unittest.TestCase):
 
         self.assertIn("duplicate MCP server name: foo", str(context.exception))
 
+    def test_mutations_normalize_existing_servers_before_saving(self):
+        self.write_config(
+            {
+                "model": {"temperature": 0.6},
+                "mcpServers": {
+                    "remote": {
+                        "enabled": True,
+                        "type": "streamable_http",
+                        "url": "https://example.com/mcp",
+                        "status": {"state": "error"},
+                        "error": "runtime failure",
+                        "tool_count": 0,
+                        "tools": ["stale"],
+                    }
+                },
+            }
+        )
+
+        result = mcp_service.set_mcp_server_enabled("remote", False)
+
+        self.assertEqual(result.code, 200)
+        server = self.read_config()["mcpServers"]["remote"]
+        self.assertFalse(server["enabled"])
+        self.assertEqual(server["transport"], "http")
+        self.assertEqual(server["headers"], {})
+        for runtime_field in ("type", "status", "error", "tool_count", "tools"):
+            self.assertNotIn(runtime_field, server)
+
 
 if __name__ == "__main__":
     unittest.main()

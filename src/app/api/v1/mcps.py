@@ -73,4 +73,7 @@ async def import_mcp_servers(payload: dict[str, Any]) -> Result:
 
 @mcpsRouter.get("/servers/status")
 async def get_mcp_server_status() -> Result:
-    return Result(data=await mcp_runtime.get_mcp_status()).success()
+    try:
+        return Result(data=await mcp_runtime.get_mcp_status()).success()
+    except Exception as exc:
+        return Result(msg=str(exc)).failure()

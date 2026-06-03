@@ -118,6 +118,19 @@ class MCPAPITest(unittest.TestCase):
         self.assertEqual(body["msg"], "mcpServers must be an object")
         status_mock.assert_not_awaited()
 
+    def test_status_endpoint_returns_failure_when_status_lookup_fails(self):
+        non_raising_client = TestClient(self.app, raise_server_exceptions=False)
+        with patch(
+            "app.api.v1.mcps.mcp_runtime.get_mcp_status",
+            new=AsyncMock(side_effect=RuntimeError("status unavailable")),
+        ):
+            response = non_raising_client.get("/mcp/servers/status")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["code"], 400)
+        self.assertEqual(body["msg"], "status unavailable")
+
 
 if __name__ == "__main__":
     unittest.main()

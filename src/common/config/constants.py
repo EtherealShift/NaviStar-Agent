@@ -2,28 +2,37 @@
 import os
 from pathlib import Path
 
+# Ensure directory exists
+def _ensure_dir(path: str) -> str:
+    Path(path).mkdir(parents=True, exist_ok=True)
+    return path
 
-def _root_path() -> Path:
-    src_root = Path(__file__).resolve()
-    while src_root.name != "src":
-        src_root = src_root.parent
-    return src_root
-
-
-
+# Ensure file exists
+def _ensure_file(path: str) -> str:
+    Path(path).touch(exist_ok=True)
+    return path
 
 # ------------------------ Paths ------------------------
-SRC_ROOT = _root_path()
-RESOURCES = os.path.join(SRC_ROOT, "resources")
-ENV_PATH = os.path.join(RESOURCES, ".env")
-CONFIG_JSON = os.path.join(RESOURCES, "config.json")
-SUPPLIER_YAML_PATH = os.path.join(RESOURCES, "supplier.yaml")
-LOG_DIR = os.path.join(RESOURCES, "log")
-MCP_SERVER_PATH = os.path.join(RESOURCES, "mcp_server.json")
+CONFIG_DIR = _ensure_dir(os.path.join(Path.home(), ".naviStar"))
+
+# 资源文件
+RESOURCE_DIR = _ensure_dir(os.path.join(CONFIG_DIR, "resources"))
+
+# .env文件
+ENV_PATH = _ensure_file(os.path.join(RESOURCE_DIR, ".env"))
+
+# 日志文件夹
+LOG_DIR = _ensure_dir(os.path.join(CONFIG_DIR, "log"))
+
+# 配置文件
+CONFIG_YAML_PATH = os.path.join(RESOURCE_DIR, "config.yaml")
 
 # ------------------------ Database ------------------------
 DEFAULT_DB_FILENAME = "navistar.db"
-DB_PATH = os.path.join(RESOURCES, "db", DEFAULT_DB_FILENAME)
+# 数据文件
+DB_DIR = _ensure_dir(os.path.join(CONFIG_DIR, "db"))
+# 数据库地址
+DB_PATH = os.path.join(DB_DIR, DEFAULT_DB_FILENAME)
 
 
 # ------------------------ App ------------------------
@@ -43,15 +52,6 @@ DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 MIMO_BASE_URL = "https://api.xiaomi.com"
 
 
-
-
-
-
-
-
-
-
-
 LOG_FORMAT = (
     "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
     "<level>{level: <8}</level> | "
@@ -62,5 +62,3 @@ LOG_FORMAT = (
 LOG_ROTATION = "10 MB"
 LOG_RETENTION = "30 days"
 LOG_COMPRESSION = "zip"
-
-
