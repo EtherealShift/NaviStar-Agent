@@ -18,7 +18,7 @@ from app.models.enty.conversation_messages import Conversation
 from app.models.req.agent_req import AgentReq
 from app.models.resp.query_resp import ConversationList
 from common.config.app_settings import AppSettings
-from common.config.constants import DEEPSEEK_BASE_URL,  CONFIG_YAML_PATH
+from common.config.constants import DEEPSEEK_BASE_URL, ENV_PATH, CONFIG_YAML_PATH
 from common.models.common_model import AgentModel
 from common.models.file_model import MimeModel
 from common.models.result import Result
@@ -30,7 +30,7 @@ from common.utils.file_utils import config_yaml_path
 def _require_api_key(value: str, env_name: str) -> str:
     if value and value.strip():
         return value
-    raise ValueError(f"{env_name} must be set in src/resources/.env or saved from Settings.")
+    raise ValueError(f"{env_name} must be set in {ENV_PATH} or saved from Settings.")
 
 
 async def get_checkpointer_dep():

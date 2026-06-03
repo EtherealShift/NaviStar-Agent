@@ -1,4 +1,5 @@
 from pathlib import Path
+from copy import deepcopy
 from typing import Any
 
 import yaml
@@ -10,6 +11,15 @@ CONFIG_YAML_PATH = DEFAULT_CONFIG_YAML_PATH
 MCP_SERVERS_KEY = "mcpServers"
 VALID_TRANSPORTS = {"stdio", "http", "sse"}
 REMOTE_TRANSPORTS = {"http", "sse"}
+DEFAULT_CONFIG = {
+    "model": {
+        "model_name": "deepseek-v4-flash",
+        "reasoning_effort": "medium",
+        "supplier": "deepseek",
+        "temperature": 1.0,
+    },
+    MCP_SERVERS_KEY: {},
+}
 
 
 class MCPConfigError(ValueError):
@@ -19,16 +29,18 @@ class MCPConfigError(ValueError):
 def _read_config() -> dict[str, Any]:
     path = Path(CONFIG_YAML_PATH)
     if not path.exists():
-        return {MCP_SERVERS_KEY: {}}
+        return deepcopy(DEFAULT_CONFIG)
 
     with path.open("r", encoding="utf-8") as file:
         data = yaml.safe_load(file) or {}
 
     if not isinstance(data, dict):
         data = {}
+    config = deepcopy(DEFAULT_CONFIG)
+    config.update(data)
     if MCP_SERVERS_KEY not in data:
-        data[MCP_SERVERS_KEY] = {}
-    return data
+        config[MCP_SERVERS_KEY] = {}
+    return config
 
 
 def _server_map(config: dict[str, Any]) -> dict[str, Any]:

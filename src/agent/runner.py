@@ -13,7 +13,7 @@ from langchain_openai import ChatOpenAI
 from agent.middlewares.middleware import install_summarization_middleware
 from app.middlewares.middleware import install_after_middlewares
 from common.config.app_settings import AppSettings
-from common.config.constants import MIMO_BASE_URL
+from common.config.constants import ENV_PATH, MIMO_BASE_URL
 from common.models.common_model import AgentModel
 from common.utils.file_utils import config_yaml_path
 
@@ -23,7 +23,7 @@ llm: str | BaseChatModel
 def _require_api_key(value: str, env_name: str) -> str:
     if value and value.strip():
         return value
-    raise ValueError(f"{env_name} must be set in src/resources/.env.")
+    raise ValueError(f"{env_name} must be set in {ENV_PATH}.")
 
 
 def create_agent_with(agent: AgentModel):

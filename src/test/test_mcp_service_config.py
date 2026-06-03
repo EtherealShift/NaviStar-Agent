@@ -47,6 +47,21 @@ class MCPConfigServiceTest(unittest.TestCase):
         self.assertTrue(server["enabled"])
         self.assertNotIn("type", server)
 
+    def test_first_mcp_write_seeds_default_model_config(self):
+        result = mcp_service.add_mcp_server(
+            {
+                "name": "remote",
+                "type": "streamable_http",
+                "url": "https://example.com/mcp",
+            }
+        )
+
+        self.assertEqual(result.code, 200)
+        config = self.read_config()
+        self.assertEqual(config["model"]["supplier"], "deepseek")
+        self.assertEqual(config["model"]["model_name"], "deepseek-v4-flash")
+        self.assertEqual(config["mcpServers"]["remote"]["transport"], "http")
+
     def test_stdio_crud_and_enabled_updates_target_only(self):
         self.write_config({"model": {"supplier": "deepseek"}, "mcpServers": {}})
 
