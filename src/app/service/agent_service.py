@@ -18,13 +18,13 @@ from app.models.enty.conversation_messages import Conversation
 from app.models.req.agent_req import AgentReq
 from app.models.resp.query_resp import ConversationList
 from common.config.app_settings import AppSettings
-from common.config.constants import DEEPSEEK_BASE_URL, MIMO_BASE_URL, SUPPLIER_YAML_PATH
+from common.config.constants import DEEPSEEK_BASE_URL,  CONFIG_YAML_PATH
 from common.models.common_model import AgentModel
 from common.models.file_model import MimeModel
 from common.models.result import Result
 import base64
 
-from common.utils.file_utils import supplier_yaml_path
+from common.utils.file_utils import config_yaml_path
 
 
 def _require_api_key(value: str, env_name: str) -> str:
@@ -109,7 +109,7 @@ async def chat_stream(req: AgentReq):
 
             checkpointer = await get_checkpointer_dep()
 
-            settings = supplier_yaml_path()
+            settings = config_yaml_path()
 
             if req.supplier and req.supplier != settings.get("model").get("supplier"):
                 settings.get("model")["supplier"] = req.supplier
@@ -118,7 +118,7 @@ async def chat_stream(req: AgentReq):
             if req.model_name and req.model_name != settings.get("model").get("model_name"):
                 settings.get("model")["model_name"] = req.model_name
             try:
-                with open(SUPPLIER_YAML_PATH, "w+") as f:
+                with open(CONFIG_YAML_PATH, "w+") as f:
                     yaml.dump(settings, f, default_flow_style=False)
             except Exception as e:
                 logger.error(e)

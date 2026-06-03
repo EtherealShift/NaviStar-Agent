@@ -15,7 +15,7 @@ from app.middlewares.middleware import install_after_middlewares
 from common.config.app_settings import AppSettings
 from common.config.constants import MIMO_BASE_URL
 from common.models.common_model import AgentModel
-from common.utils.file_utils import supplier_yaml_path
+from common.utils.file_utils import config_yaml_path
 
 llm: str | BaseChatModel
 
@@ -41,7 +41,7 @@ def create_agent_with(agent: AgentModel):
     settings = AppSettings()
 
     # 获取模型配置
-    supplier_yaml = supplier_yaml_path().get("model", {})
+    supplier_yaml = config_yaml_path().get("model", {})
 
     llm_kwargs = {
         "model": agent.model_name,
