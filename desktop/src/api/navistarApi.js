@@ -78,7 +78,7 @@ export async function fetchModelList() {
 
 export async function fetchMcpServers() {
   const result = await request("/mcp/servers", { method: "GET" });
-  return result.data || [];
+  return result.data || { mcpServers: {} };
 }
 
 export async function createMcpServer(server) {
@@ -86,6 +86,14 @@ export async function createMcpServer(server) {
     method: "POST",
     body: JSON.stringify(server),
   });
+}
+
+export async function importMcpServers(config) {
+  const result = await request("/mcp/servers/import", {
+    method: "POST",
+    body: JSON.stringify(config),
+  });
+  return result.data || { mcpServers: {} };
 }
 
 export async function updateMcpServer(serverId, server) {
@@ -100,17 +108,15 @@ export async function deleteMcpServer(serverId) {
 }
 
 export async function toggleMcpServer(serverId, enabled) {
-  return request(`/mcp/servers/${encodeURIComponent(serverId)}/toggle`, {
-    method: "POST",
+  return request(`/mcp/servers/${encodeURIComponent(serverId)}/enabled`, {
+    method: "PUT",
     body: JSON.stringify({ enabled }),
   });
 }
 
-export async function testMcpServer(server) {
-  return request("/mcp/servers/test", {
-    method: "POST",
-    body: JSON.stringify(server),
-  });
+export async function fetchMcpStatus() {
+  const result = await request("/mcp/servers/status", { method: "GET" });
+  return result.data || {};
 }
 
 export async function streamChatMessage(payload, handlers = {}) {
