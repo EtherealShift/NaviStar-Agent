@@ -119,6 +119,11 @@ export async function fetchMcpStatus() {
   return result.data || {};
 }
 
+export async function testMcpServer() {
+  const result = await request("/mcp/servers/status", { method: "GET" });
+  return result.data || {};
+}
+
 export async function streamChatMessage(payload, handlers = {}) {
   const baseUrl = await getApiBaseUrl();
   const response = await fetch(`${baseUrl}/ai/chat/send/stream`, {
