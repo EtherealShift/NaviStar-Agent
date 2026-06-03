@@ -13,7 +13,7 @@ from agent.prompys.system_prompt import SYSTEM_PROMPT
 from agent.runner import create_agent_with
 from agent.tools.tools import install_tools
 from app.database.conversatuon_db import del_message_content, query_conversation, get_query_content_list
-from app.mcp.service.mcp_service import get_mcp_client
+from app.mcp.service.mcp_runtime import get_mcp_client
 from app.models.enty.conversation_messages import Conversation
 from app.models.req.agent_req import AgentReq
 from app.models.resp.query_resp import ConversationList
