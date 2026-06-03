@@ -13,13 +13,10 @@ import {
   ChevronDown,
   ChevronRight,
   CircleAlert,
-  Copy,
-  Database,
   FilePlus2,
   GitBranch,
   Globe2,
   Keyboard,
-  Link2,
   Loader2,
   MessageCircle,
   Minimize,
@@ -30,7 +27,6 @@ import {
   RefreshCw,
   Search,
   Settings,
-  ShieldCheck,
   SlidersHorizontal,
   Square,
   Terminal as TerminalIcon,
@@ -1533,12 +1529,26 @@ function McpSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [apiStatus, setApiStatus] = useState("同步中");
+  const [modalError, setModalError] = useState("");
 
   async function refreshServers(nextStatus = "已同步") {
     const data = await fetchMcpServers();
     const items = normalizeMcpServerList(data);
     setServers(items.length ? items : []);
     setApiStatus(items.length ? nextStatus : "暂无服务器");
+  }
+
+  async function refreshServersAfterMutation(nextStatus) {
+    try {
+      await refreshServers(nextStatus);
+    } catch (error) {
+      setApiStatus(`${nextStatus}，刷新失败：${error.message}`);
+    }
+  }
+
+  function showModalError(message) {
+    setModalError(message);
+    setApiStatus(message);
   }
 
   useEffect(() => {
@@ -1567,27 +1577,30 @@ function McpSettingsPage() {
   function startNewServer() {
     setMode("manual");
     setManualConfigText(manualMcpConfigExample);
+    setModalError("");
     setIsModalOpen(true);
   }
 
   function startEditServer(server) {
     setMode("edit");
     setDraft(normalizeMcpServer(server));
+    setModalError("");
     setIsModalOpen(true);
   }
 
   async function saveDraft() {
+    setModalError("");
     const payload = mcpDraftToPayload(draft);
     if (!payload.name) {
-      setApiStatus("名称不能为空");
+      showModalError("名称不能为空");
       return;
     }
     if (payload.transport === "stdio" && !payload.command) {
-      setApiStatus("stdio 需要 command");
+      showModalError("stdio 需要 command");
       return;
     }
     if (payload.transport !== "stdio" && !payload.url) {
-      setApiStatus("远程服务需要 url");
+      showModalError("远程服务需要 url");
       return;
     }
 
@@ -1602,31 +1615,34 @@ function McpSettingsPage() {
     setSaving(true);
     try {
       await updateMcpServer(nextServer.id, payload);
-      await refreshServers("已保存");
+      await refreshServersAfterMutation("已保存");
+      setModalError("");
       setIsModalOpen(false);
     } catch (error) {
-      setApiStatus(`保存失败：${error.message}`);
+      showModalError(`保存失败：${error.message}`);
     } finally {
       setSaving(false);
     }
   }
 
   async function saveManualConfig() {
+    setModalError("");
     let config;
     try {
       config = parseManualMcpConfig(manualConfigText);
     } catch (error) {
-      setApiStatus(`解析失败：${error.message}`);
+      showModalError(`解析失败：${error.message}`);
       return;
     }
 
     setSaving(true);
     try {
       await importMcpServers(config);
-      await refreshServers("已导入");
+      await refreshServersAfterMutation("已导入");
+      setModalError("");
       setIsModalOpen(false);
     } catch (error) {
-      setApiStatus(`导入失败：${error.message}`);
+      showModalError(`导入失败：${error.message}`);
     } finally {
       setSaving(false);
     }
@@ -1635,7 +1651,7 @@ function McpSettingsPage() {
   async function removeServer(serverId) {
     try {
       await deleteMcpServer(serverId);
-      await refreshServers("已删除");
+      await refreshServersAfterMutation("已删除");
     } catch (error) {
       setApiStatus(`删除失败：${error.message}`);
     }
@@ -1646,7 +1662,7 @@ function McpSettingsPage() {
 
     try {
       await toggleMcpServer(server.id, enabled);
-      await refreshServers(enabled ? "已启用" : "已关闭");
+      await refreshServersAfterMutation(enabled ? "已启用" : "已关闭");
     } catch (error) {
       setApiStatus(`状态更新失败：${error.message}`);
       setServers((items) => items.map((item) => (item.id === server.id ? { ...item, enabled: !enabled } : item)));
@@ -1746,6 +1762,7 @@ function McpSettingsPage() {
       {isModalOpen && (
         mode === "manual" ? (
           <ManualMcpConfigDialog
+            error={modalError}
             saving={saving}
             value={manualConfigText}
             onCancel={() => setIsModalOpen(false)}
@@ -1777,6 +1794,14 @@ function McpSettingsPage() {
             <div className="flex-1 overflow-y-auto">
               <McpServerForm draft={draft} onChange={setDraft} modalMode={mode} />
             </div>
+
+            {modalError && (
+              <div className="px-5 pb-3">
+                <div className="rounded-md border border-[#f0d7d2] bg-[#fff7f5] px-3 py-2 text-xs leading-5 text-[#9a423b]" role="alert">
+                  {modalError}
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center justify-between gap-2 rounded-b-xl border-t border-[#eceeeb] bg-[#fdfdfd] px-5 py-3">
               <div>
@@ -1824,7 +1849,7 @@ function McpSettingsPage() {
   );
 }
 
-function ManualMcpConfigDialog({ onCancel, onChange, onConfirm, saving, value }) {
+function ManualMcpConfigDialog({ error, onCancel, onChange, onConfirm, saving, value }) {
   const lineCount = Math.max(value.split(/\r?\n/).length, 13);
   const lineNumbers = Array.from({ length: lineCount }, (_, index) => index + 1).join("\n");
 
@@ -1849,16 +1874,23 @@ function ManualMcpConfigDialog({ onCancel, onChange, onConfirm, saving, value })
         </div>
 
         <div className="px-5">
-          <div className="manual-config-editor h-[300px] overflow-hidden rounded-lg border border-[#d8dee7] bg-[#eef0f3] shadow-inner">
-            <pre aria-hidden="true" className="manual-config-lines">{lineNumbers}</pre>
+          <div className="grid h-[300px] grid-cols-[48px_minmax(0,1fr)] overflow-hidden rounded-lg border border-[#d8dee7] bg-white shadow-inner">
+            <pre aria-hidden="true" className="select-none overflow-hidden border-r border-[#d8dee7] bg-[#eef0f3] px-3 py-3 text-right font-mono text-xs leading-5 text-[#7b8490]">
+              {lineNumbers}
+            </pre>
             <textarea
               aria-label="MCP Servers 配置 JSON"
-              className="manual-config-textarea"
+              className="h-full min-w-0 resize-none overflow-auto border-0 bg-white px-3 py-3 font-mono text-xs leading-5 text-[#1f2322] outline-none placeholder:text-[#8b949e]"
               spellCheck={false}
               value={value}
               onChange={(event) => onChange(event.target.value)}
             />
           </div>
+          {error && (
+            <div className="mt-3 rounded-md border border-[#f0d7d2] bg-[#fff7f5] px-3 py-2 text-xs leading-5 text-[#9a423b]" role="alert">
+              {error}
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
