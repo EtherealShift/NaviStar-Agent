@@ -21,9 +21,9 @@ class MCPAPITest(unittest.TestCase):
             yaml.safe_dump({"model": {"temperature": 1.0}, "mcpServers": {}}, sort_keys=False),
             encoding="utf-8",
         )
-        app = FastAPI()
-        app.include_router(mcpsRouter, prefix="/mcp")
-        self.client = TestClient(app)
+        self.app = FastAPI()
+        self.app.include_router(mcpsRouter, prefix="/mcp")
+        self.client = TestClient(self.app)
 
     def tearDown(self):
         mcp_service.CONFIG_YAML_PATH = self.original_path
@@ -76,6 +76,47 @@ class MCPAPITest(unittest.TestCase):
         data = response.json()["data"]["mcpServers"]
         self.assertEqual(data["local-fetch"]["transport"], "stdio")
         self.assertEqual(data["local-fetch"]["command"], "npx")
+
+    def test_list_servers_returns_error_status_when_runtime_status_fails(self):
+        create_response = self.client.post(
+            "/mcp/servers",
+            json={
+                "name": "remote",
+                "type": "streamable_http",
+                "url": "https://example.com/mcp",
+            },
+        )
+        self.assertEqual(create_response.json()["code"], 200)
+
+        non_raising_client = TestClient(self.app, raise_server_exceptions=False)
+        with patch(
+            "app.api.v1.mcps.mcp_runtime.get_mcp_status",
+            new=AsyncMock(side_effect=RuntimeError("status unavailable")),
+        ):
+            response = non_raising_client.get("/mcp/servers")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["code"], 200)
+        status = body["data"]["mcpServers"]["remote"]["status"]
+        self.assertEqual(
+            status,
+            {"state": "error", "message": "status unavailable", "tool_count": 0, "tools": []},
+        )
+
+    def test_list_servers_returns_failure_for_malformed_config(self):
+        self.config_path.write_text(
+            yaml.safe_dump({"model": {"temperature": 1.0}, "mcpServers": []}, sort_keys=False),
+            encoding="utf-8",
+        )
+
+        with patch("app.api.v1.mcps.mcp_runtime.get_mcp_status", new=AsyncMock()) as status_mock:
+            response = self.client.get("/mcp/servers")
+
+        body = response.json()
+        self.assertEqual(body["code"], 400)
+        self.assertEqual(body["msg"], "mcpServers must be an object")
+        status_mock.assert_not_awaited()
 
 
 if __name__ == "__main__":

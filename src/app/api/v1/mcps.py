@@ -13,18 +13,28 @@ def _payload(req: McpServerReq) -> dict[str, Any]:
     return req.to_payload()
 
 
+def _status_fallback(state: str, message: str) -> dict[str, Any]:
+    return {"state": state, "message": message, "tool_count": 0, "tools": []}
+
+
 async def _servers_with_status() -> Result:
     result = mcp_service.get_mcp_servers()
     if result.code != 200:
         return result
 
-    status = await mcp_runtime.get_mcp_status()
+    fallback_status = _status_fallback("unknown", "not checked")
+    try:
+        status = await mcp_runtime.get_mcp_status()
+    except Exception as exc:
+        status = {}
+        fallback_status = _status_fallback("error", str(exc))
+
     servers = result.data.get("mcpServers", {})
     enriched = {
         name: {
             "name": name,
             **server,
-            "status": status.get(name, {"state": "unknown", "message": "not checked"}),
+            "status": status.get(name, fallback_status),
         }
         for name, server in servers.items()
     }
@@ -64,4 +74,3 @@ async def import_mcp_servers(payload: dict[str, Any]) -> Result:
 @mcpsRouter.get("/servers/status")
 async def get_mcp_server_status() -> Result:
     return Result(data=await mcp_runtime.get_mcp_status()).success()
-
