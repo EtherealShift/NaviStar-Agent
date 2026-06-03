@@ -1622,10 +1622,8 @@ function McpSettingsPage() {
 
     setSaving(true);
     try {
-      const data = await importMcpServers(config);
-      const items = normalizeMcpServerList(data);
-      setServers(items.length ? items : []);
-      setApiStatus("已导入");
+      await importMcpServers(config);
+      await refreshServers("已导入");
       setIsModalOpen(false);
     } catch (error) {
       setApiStatus(`导入失败：${error.message}`);
